@@ -1,3 +1,11 @@
 
 # Use bd merge for beads JSONL files
 .beads/issues.jsonl merge=beads
+
+# Force LF line endings for shell scripts and tools that run in WSL/Linux.
+# Windows checkouts otherwise get CRLF, which breaks `#!/usr/bin/env bash`
+# (kernel reports "required file not found") and yields `$'\r': command not
+# found` errors on `set -o pipefail` etc.
+*.sh        text eol=lf
+Makefile    text eol=lf
+*.bash      text eol=lf

@@ -911,15 +911,20 @@ async def health_check(req: func.HttpRequest) -> func.HttpResponse:
     """Health check endpoint."""
     health = {"status": "healthy", "server": server.name, "version": server.version}
 
-    # Optionally check Cosmos DB connectivity
-    try:
-        client = await get_cosmos_client()
-        database = client.get_database_client(COSMOS_DB_DATABASE)
-        await database.read()
-        health["cosmos_db"] = "connected"
-    except Exception as e:
-        health["cosmos_db"] = f"error: {e!s}"
-        health["status"] = "degraded"
+    # Optionally check Cosmos DB connectivity. When COSMOS_DB_ENDPOINT is not
+    # configured (e.g. local Docker smoke tests without Azure credentials),
+    # skip the probe so the liveness check still reports healthy.
+    if not COSMOS_DB_ENDPOINT:
+        health["cosmos_db"] = "not_configured"
+    else:
+        try:
+            client = await get_cosmos_client()
+            database = client.get_database_client(COSMOS_DB_DATABASE)
+            await database.read()
+            health["cosmos_db"] = "connected"
+        except Exception as e:
+            health["cosmos_db"] = f"error: {e!s}"
+            health["status"] = "degraded"
 
     status_code = 200 if health["status"] == "healthy" else 503
     return func.HttpResponse(

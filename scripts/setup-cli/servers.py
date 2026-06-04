@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -64,16 +65,31 @@ def setup_server_venv(
 
     venv_dir = sdir / ".venv"
 
-    # Create venv
+    uv_path = shutil.which("uv")
+    if not uv_path:
+        console.print(
+            "[error]uv is required for venv creation but was not found on PATH.[/error]\n"
+            "[muted]Install it: [bold]curl -LsSf https://astral.sh/uv/install.sh | sh[/bold] "
+            "(or see https://docs.astral.sh/uv/), then re-run.[/muted]"
+        )
+        return False
+
+    # Create venv with uv (fast, works with uv-managed Pythons whose ensurepip
+    # is missing/broken under python-build-standalone).
+    # No --seed needed: `uv pip install --python` installs directly without pip in the venv.
     if force or not _venv_exists(sdir):
         with Progress(SpinnerColumn(), TextColumn("[step]{task.description}"), console=console) as prog:
             prog.add_task(f"Creating venv for {server_name}…", total=None)
             if venv_dir.exists():
                 subprocess.run(["rm", "-rf", str(venv_dir)], check=False)
+            # UV_LINK_MODE=copy avoids hardlink errors across filesystem
+            # boundaries (e.g. WSL /mnt/c <-> Linux ext4 cache).
+            env = {**os.environ, "UV_LINK_MODE": "copy"}
             result = subprocess.run(
-                [python_cmd, "-m", "venv", str(venv_dir)],
+                [uv_path, "venv", "--python", python_cmd, str(venv_dir)],
                 capture_output=True,
                 text=True,
+                env=env,
             )
         if result.returncode != 0:
             console.print(f"[error]Failed to create venv:[/error] {result.stderr}")
@@ -83,33 +99,37 @@ def setup_server_venv(
     else:
         console.print("  [muted]venv already exists — skipping (use --force to recreate)[/muted]")
 
-    # Install deps
-    pip = str(venv_dir / "bin" / "pip")
+    # Resolve venv python (handles both POSIX bin/ and Windows Scripts/ layouts)
+    vpy = venv_dir / "bin" / "python"
+    if not vpy.is_file():
+        vpy = venv_dir / "Scripts" / "python.exe"
+    if not vpy.is_file():
+        console.print(
+            f"[error]venv at {venv_dir} has no python interpreter — recreate with --force[/error]"
+        )
+        return False
+    vpy_str = str(vpy)
+
+    # Install deps with uv pip (bypasses pip; honors the venv via --python)
+    uv_env = {**os.environ, "UV_LINK_MODE": "copy"}
     with Progress(SpinnerColumn(), TextColumn("[step]{task.description}"), console=console) as prog:
         prog.add_task(f"Installing dependencies for {server_name}…", total=None)
         result = subprocess.run(
-            [pip, "install", "-q", "-r", str(req_file)],
+            [uv_path, "pip", "install", "--python", vpy_str, "-q", "-r", str(req_file)],
             capture_output=True,
             text=True,
+            env=uv_env,
         )
     if result.returncode != 0:
-        console.print(f"[error]pip install failed for {server_name}:[/error]")
+        console.print(f"[error]uv pip install failed for {server_name}:[/error]")
         console.print(result.stderr[-500:] if result.stderr else "(no output)")
         console.print(COPILOT_TIPS["pip_fail"])
         return False
 
-    # Also install to .python_packages for Azure Functions worker
-    pkg_target = sdir / ".python_packages" / "lib" / "site-packages"
-    with Progress(SpinnerColumn(), TextColumn("[step]{task.description}"), console=console) as prog:
-        prog.add_task(f"Installing Azure Functions packages for {server_name}…", total=None)
-        result = subprocess.run(
-            [pip, "install", "-q", "-r", str(req_file), "--target", str(pkg_target), "--upgrade"],
-            capture_output=True,
-            text=True,
-        )
-    if result.returncode != 0:
-        console.print("[warning]⚠  .python_packages install had issues (non-fatal):[/warning]")
-        console.print(result.stderr[-300:] if result.stderr else "")
+    # Note: .python_packages/ is only needed for `func azure functionapp publish`
+    # deployments. Local `func start` uses the venv, so skip it here. If you need
+    # it for deployment, run: uv pip install -r requirements.txt \
+    #   --target .python_packages/lib/site-packages
 
     console.print("  [success]✓[/success] dependencies installed")
     return True

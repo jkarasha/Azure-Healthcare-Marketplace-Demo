@@ -326,4 +326,23 @@ echo "Starting Azure Functions host..."
 echo "============================================"
 echo ""
 
-func start -p $PORT
+# Ensure a local.settings.json exists so `func start` can detect the worker
+# runtime (Python). The repo .gitignores this file, so generate a minimal
+# stub on first run. Existing user-authored files are left untouched.
+if [ ! -f local.settings.json ]; then
+    echo "  Creating minimal local.settings.json (Python worker runtime)..."
+    cat > local.settings.json <<'JSON'
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "python"
+  }
+}
+JSON
+fi
+
+# Belt-and-braces: also export the env var so func start always sees it.
+export FUNCTIONS_WORKER_RUNTIME=python
+
+func start -p $PORT --python

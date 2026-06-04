@@ -24,7 +24,12 @@ MCP_SERVERS_ROOT = Path(__file__).resolve().parents[1]
 if str(MCP_SERVERS_ROOT) not in sys.path:
     sys.path.insert(0, str(MCP_SERVERS_ROOT))
 
-from shared.mcp_base import MCPServer, create_function_app_handlers  # noqa: E402
+try:
+    # Local dev: ../shared is on sys.path
+    from shared.mcp_base import MCPServer, create_function_app_handlers  # noqa: E402
+except ImportError:
+    # Container: Dockerfile copies shared/mcp_base.py to function app root
+    from mcp_base import MCPServer, create_function_app_handlers  # type: ignore[no-redef]  # noqa: E402
 
 from document_reader import ReadOptions, read_document  # noqa: E402
 

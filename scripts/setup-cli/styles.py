@@ -26,12 +26,10 @@ LOGO = r"""
 """
 
 MCP_SERVERS = {
-    "npi-lookup": {"port": 7071, "desc": "NPI provider registry lookup"},
-    "icd10-validation": {"port": 7072, "desc": "ICD-10 diagnosis code validation"},
-    "cms-coverage": {"port": 7073, "desc": "Medicare coverage policy search"},
-    "fhir-operations": {"port": 7074, "desc": "FHIR patient data operations"},
-    "pubmed": {"port": 7075, "desc": "PubMed literature search"},
-    "clinical-trials": {"port": 7076, "desc": "ClinicalTrials.gov search"},
+    "mcp-reference-data": {"port": 7071, "desc": "NPI + ICD-10 + CMS Coverage (consolidated)"},
+    "mcp-clinical-research": {"port": 7072, "desc": "FHIR + PubMed + ClinicalTrials (consolidated)"},
+    "cosmos-rag": {"port": 7073, "desc": "Cosmos DB RAG & audit"},
+    "document-reader": {"port": 7078, "desc": "Local document/PDF reader"},
 }
 
 COPILOT_TIPS = {

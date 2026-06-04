@@ -11,6 +11,9 @@ description = "Azure-native healthcare marketplace with MCP servers, skills, and
 requires-python = ">=3.9"
 readme = "README.md"
 license = { text = "MIT" }
+dependencies = [
+    "rich>=15.0.0",
+]
 
 # ── Ruff (linter + formatter) ───────────────────────────────────────────────
 [tool.ruff]

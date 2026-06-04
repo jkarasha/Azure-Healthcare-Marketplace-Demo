@@ -1,7 +1,7 @@
 # ============================================================================
 # Healthcare MCP Servers — Docker Compose (Consolidated)
 # ============================================================================
-# Spins up the 3 consolidated MCP servers as containers using the shared Dockerfile.
+# Spins up the 4 consolidated MCP servers as containers using the shared Dockerfile.
 #
 # Quick start:
 #   docker compose up --build          # foreground
@@ -12,6 +12,7 @@
 #   mcp-reference-data    → 7071  (NPI + ICD-10 + CMS)
 #   mcp-clinical-research → 7072  (FHIR + PubMed + ClinicalTrials)
 #   cosmos-rag            → 7073  (Cosmos DB RAG & Audit)
+#   document-reader       → 7078  (Local document loader)
 # ============================================================================
 
 x-mcp-server: &mcp-server-defaults
@@ -84,6 +85,22 @@ services:
       - AZURE_AI_SERVICES_ENDPOINT=${AZURE_AI_SERVICES_ENDPOINT:-}
       - EMBEDDING_DEPLOYMENT_NAME=${EMBEDDING_DEPLOYMENT_NAME:-text-embedding-3-large}
       - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-3072}
+
+  # --------------------------------------------------------------------------
+  # Document Reader: local document loader (text/JSON/CSV + PDF/image base64)
+  # --------------------------------------------------------------------------
+  document-reader:
+    <<: *mcp-server-defaults
+    container_name: mcp-document-reader
+    build:
+      context: ./src/mcp-servers
+      dockerfile: Dockerfile
+      args:
+        SERVER_NAME: document-reader
+    ports:
+      - "7078:80"
+    environment:
+      - MCP_SERVER_NAME=document-reader
 
 networks:
   mcp-network:
