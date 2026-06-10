@@ -162,6 +162,23 @@ def run_eval_contracts(project_root: Path) -> bool:
     return result.returncode == 0
 
 
+def _detect_function_code() -> str:
+    """Detect whether the running MCP servers require a Functions access key.
+
+    Local `func start` servers run anonymously (no key); Docker containers
+    enforce FUNCTION auth with the ``docker-default-key``. Probe the
+    reference-data server's health endpoint to pick the right mode.
+    """
+    base = "http://localhost:7071/health"
+    ok, _ = _curl_json(base)
+    if ok:
+        return ""
+    ok, _ = _curl_json(f"{base}?code=docker-default-key")
+    if ok:
+        return "docker-default-key"
+    return ""
+
+
 def run_eval_latency(project_root: Path) -> bool:
     """Run the latency eval script."""
     script = project_root / "scripts" / "eval_latency.py"
@@ -170,8 +187,12 @@ def run_eval_latency(project_root: Path) -> bool:
         console.print("[error]eval_latency.py not found[/error]")
         return False
     console.print("[step]Running latency evaluations…[/step]")
+    cmd = ["python3", str(script), "--config", str(config)]
+    code = _detect_function_code()
+    if code:
+        cmd += ["--code", code]
     result = subprocess.run(
-        ["python3", str(script), "--config", str(config)],
+        cmd,
         cwd=str(project_root),
     )
     return result.returncode == 0

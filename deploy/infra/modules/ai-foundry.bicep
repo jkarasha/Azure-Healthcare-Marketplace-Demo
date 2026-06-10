@@ -33,9 +33,9 @@ param modelDeployments array = [
     capacity: 10
   }
   {
-    name: 'gpt-4o-mini'
-    model: 'gpt-4o-mini'
-    version: '2024-07-18'
+    name: 'gpt-5.4-mini'
+    model: 'gpt-5.4-mini'
+    sku: 'GlobalStandard'
     capacity: 10
   }
   {
@@ -110,14 +110,14 @@ resource deployments 'Microsoft.CognitiveServices/accounts/deployments@2025-04-0
     parent: aiServices
     name: deployment.name
     sku: {
-      name: 'Standard'
+      name: deployment.?sku ?? 'Standard'
       capacity: deployment.capacity
     }
     properties: {
       model: {
         format: 'OpenAI'
         name: deployment.model
-        version: deployment.version
+        ...(deployment.?version != null ? { version: deployment.version } : {})
       }
       versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
       raiPolicyName: 'Microsoft.DefaultV2'

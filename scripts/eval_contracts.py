@@ -215,53 +215,68 @@ def main() -> int:
     print(f"Total canonical tools (v2): {len(canonical_v2)}\n")
 
     # --- Also extract from legacy servers (v1) for backwards compat check ---
+    # Legacy server directories may have been removed after consolidation; only
+    # check the ones that still exist on disk.
     actual_by_server: dict[str, set[str]] = {}
     for server, file_path in SERVER_FILES.items():
-        actual_by_server[server] = _extract_server_tools(file_path)
+        if file_path.exists():
+            actual_by_server[server] = _extract_server_tools(file_path)
 
-    canonical = set().union(*actual_by_server.values())
+    if actual_by_server:
+        canonical = set().union(*actual_by_server.values())
 
-    print("Legacy MCP tools (v1) from implementation:")
-    for server in sorted(actual_by_server):
-        names = sorted(actual_by_server[server])
-        print(f"  - {server}: {len(names)} tools")
-        print(f"    {', '.join(names)}")
-    print(f"Total legacy tools (v1): {len(canonical)}\n")
+        print("Legacy MCP tools (v1) from implementation:")
+        for server in sorted(actual_by_server):
+            names = sorted(actual_by_server[server])
+            print(f"  - {server}: {len(names)} tools")
+            print(f"    {', '.join(names)}")
+        print(f"Total legacy tools (v1): {len(canonical)}\n")
 
-    # --- Backwards compatibility check: v2 should be superset of v1 ---
-    missing_from_v2 = canonical - canonical_v2
-    extra_in_v2 = canonical_v2 - canonical
-    if missing_from_v2:
-        print(f"WARN: {len(missing_from_v2)} legacy tools missing from consolidated servers:")
-        for t in sorted(missing_from_v2):
-            print(f"  - {t}")
-    if extra_in_v2:
-        print(f"INFO: {len(extra_in_v2)} new tools in consolidated servers (not in legacy):")
-        for t in sorted(extra_in_v2):
-            print(f"  - {t}")
-    if not missing_from_v2:
-        print("PASS: All legacy tools present in consolidated servers (backwards compatible)")
-    print()
+        # --- Backwards compatibility check: v2 should be superset of v1 ---
+        missing_from_v2 = canonical - canonical_v2
+        extra_in_v2 = canonical_v2 - canonical
+        if missing_from_v2:
+            print(f"WARN: {len(missing_from_v2)} legacy tools missing from consolidated servers:")
+            for t in sorted(missing_from_v2):
+                print(f"  - {t}")
+        if extra_in_v2:
+            print(f"INFO: {len(extra_in_v2)} new tools in consolidated servers (not in legacy):")
+            for t in sorted(extra_in_v2):
+                print(f"  - {t}")
+        if not missing_from_v2:
+            print("PASS: All legacy tools present in consolidated servers (backwards compatible)")
+        print()
+    else:
+        # All legacy servers consolidated/removed — v2 is the canonical surface.
+        canonical = canonical_v2
+        print("Legacy MCP servers (v1) not present on disk; using consolidated (v2) as canonical.\n")
 
     checks = [
-        ("README", _extract_readme_tools(ROOT / "README.md")),
-        ("foundry-integration/agent_setup.py", _extract_agent_setup_tools(ROOT / "foundry-integration/agent_setup.py")),
+        ("README", _extract_readme_tools, ROOT / "README.md"),
+        ("foundry-integration/agent_setup.py", _extract_agent_setup_tools, ROOT / "foundry-integration/agent_setup.py"),
         (
             "foundry-integration/agent_config.yaml",
-            _extract_yaml_allowed_tools(ROOT / "foundry-integration/agent_config.yaml"),
+            _extract_yaml_allowed_tools,
+            ROOT / "foundry-integration/agent_config.yaml",
         ),
         (
             "foundry-integration/tools_catalog.json",
-            _extract_tools_catalog_names(ROOT / "foundry-integration/tools_catalog.json"),
+            _extract_tools_catalog_names,
+            ROOT / "foundry-integration/tools_catalog.json",
         ),
         (
             "docs/MCP-SERVERS-BEGINNER-GUIDE.md",
-            _extract_beginner_guide_tools(ROOT / "docs/MCP-SERVERS-BEGINNER-GUIDE.md"),
+            _extract_beginner_guide_tools,
+            ROOT / "docs/MCP-SERVERS-BEGINNER-GUIDE.md",
         ),
     ]
 
     ok = True
-    for source, declared in checks:
+    for source, extractor, path in checks:
+        if not path.exists():
+            print(f"SKIP {source}: file not found (removed during consolidation)")
+            continue
+        declared = extractor(path)
         passed, lines = _report_invalid(source, declared, canonical)
         ok = ok and passed
         for line in lines:

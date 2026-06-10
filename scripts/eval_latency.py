@@ -132,7 +132,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", required=True, help="Path to eval config JSON")
     parser.add_argument("--iterations", type=int, default=None, help="Override iterations")
     parser.add_argument("--concurrency", type=int, default=None, help="Override concurrency")
+    parser.add_argument(
+        "--code",
+        default=None,
+        help="Azure Functions key appended as ?code= to each case URL (e.g. docker-default-key)",
+    )
     return parser.parse_args()
+
+
+def _apply_code(url: str, code: str) -> str:
+    """Append the Functions access key to a URL as a query parameter."""
+    if not code:
+        return url
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}code={code}"
 
 
 def main() -> int:
@@ -156,6 +169,12 @@ def main() -> int:
     if not cases:
         print("No eval cases found in config")
         return 1
+
+    code = args.code if args.code is not None else os.environ.get("MCP_FUNCTION_CODE", "")
+    if code:
+        for case in cases:
+            if "url" in case:
+                case["url"] = _apply_code(case["url"], code)
 
     print(f"Running MCP evals: {len(cases)} case(s), iterations={iterations}, concurrency={concurrency}")
 
