@@ -36,7 +36,7 @@ flowchart LR
         REF["mcp-reference-data"]
         CLIN["mcp-clinical-research"]
         RAG["cosmos-rag"]
-        DOC["document-reader"]
+        DOC["document-reader<br/>local capability"]
     end
 
     HUMAN["Human Authority Plane"]
@@ -50,7 +50,7 @@ flowchart LR
     APIM --> REF
     APIM --> CLIN
     APIM --> RAG
-    APIM --> DOC
+    WORKFLOW --> DOC
     REF --> RECORDS
     CLIN --> RECORDS
     RAG --> RECORDS
@@ -206,7 +206,7 @@ products:
 | Reference data | `{gateway}/mcp/reference-data/mcp` | `{gateway}/mcp-pt/reference-data/mcp` | `mcp-reference-data` Function App |
 | Clinical research | `{gateway}/mcp/clinical-research/mcp` | `{gateway}/mcp-pt/clinical-research/mcp` | `mcp-clinical-research` Function App |
 | RAG and audit | `{gateway}/mcp/cosmos-rag/mcp` | `{gateway}/mcp-pt/cosmos-rag/mcp` | `cosmos-rag` Function App |
-| Document reading | Deployment-specific | Deployment-specific | `document-reader` service |
+| Document reading | Not routed by the current APIM deployment | Local/direct | `document-reader` service |
 
 The OAuth path is the intended production access path. The current Python
 agent configuration defaults to the passthrough base path, so runtime access

@@ -14,7 +14,7 @@ For the canonical responsibility narrative, see
 | MCP latency runner | **Partially implemented** | Measures success rate and p50/p95/max latency | Default cases focus on MCP protocol operations; no committed APIM production baseline is established |
 | Native Agent Framework runner | **Partially implemented** | Uses Agent Framework lab task and evaluation contracts | Current tasks primarily validate MCP protocol correctness, not workflow outcome quality |
 | Prior-auth fidelity runner | **Partially implemented** | Evaluates schema, bead ordering, and decision comparison | Current data contains one evaluated assessment; that assessment is schema-invalid, so `1/1` decision agreement is not meaningful production evidence |
-| CI evaluation gate | **Target state** | Workflow files exist | Deployment sets `RUN_EVALS=false`, and the quality workflow does not run pytest |
+| CI evaluation gate | **Target state** | Workflow files exist | `.github/workflows/main_staging_ci.yml` has pytest commented out, while the deployment workflow sets `RUN_EVALS=false` |
 
 ## Evidence Principle
 
