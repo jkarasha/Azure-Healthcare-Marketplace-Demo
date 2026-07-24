@@ -79,3 +79,6 @@ scripts/**/*.json
 # Workflow run outputs (timestamped dirs under .runs/)
 .runs/*
 !.runs/README.md
+
+# Git worktrees
+.worktrees/
