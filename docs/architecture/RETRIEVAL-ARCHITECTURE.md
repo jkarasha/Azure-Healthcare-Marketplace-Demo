@@ -2,11 +2,32 @@
 
 ## Executive Summary
 
+For the canonical production-agent thesis and maturity model, see
+[`README.md`](../../README.md).
+
+This document separates two responsibilities:
+
+- **Capability services translate** narrow MCP operations into authenticated
+  access to external platforms. They do not become the source of truth and do
+  not make workflow decisions.
+- **Systems of record own** durable authoritative facts, records, and retrieval
+  indexes. They do not perform agent reasoning.
+
+The agent execution plane consumes capability contracts; the control plane
+governs access; the human authority plane remains responsible for
+consequential decisions.
+
+### Maturity Labels
+
+- **Implemented:** present in current code or infrastructure.
+- **Partially implemented:** present with known enforcement or deployment gaps.
+- **Target state:** recommended architecture not yet fully operating.
+
 The Healthcare Marketplace uses a **multi-tier retrieval architecture** where Azure Health Data Services (AHDS) provides the clinical data foundation, Cosmos DB handles structured operational data, and Azure AI Search powers semantic retrieval:
 
 | Data Type | Recommended Service | Rationale |
 |-----------|---------------------|----------|
-| Patient Records & Clinical Data | **Azure Health Data Services (FHIR R4)** | Authoritative clinical data store; FHIR-native queries via `fhir-operations` MCP server |
+| Patient Records & Clinical Data | **Azure Health Data Services (FHIR R4)** | Authoritative clinical data store; FHIR-native queries via `mcp-clinical-research` |
 | Observations & Vitals | **Azure Health Data Services (FHIR R4)** | Structured clinical observations including MedTech device-ingested data |
 | Medical Imaging | **Azure Health Data Services (DICOM)** | DICOMweb storage and retrieval; linked to FHIR via ImagingStudy resources |
 | CMS Coverage Policies | **Cosmos DB** | Structured documents, known IDs, transactional reads |
@@ -17,21 +38,48 @@ The Healthcare Marketplace uses a **multi-tier retrieval architecture** where Az
 | Audit Logs/Waypoints | **Cosmos DB** | JSON documents, transactional writes |
 | Protocol Templates | **Azure Blob + AI Search** | Large documents with semantic indexing |
 
-### How the tiers connect
+### How the responsibilities connect
 
 ```mermaid
 flowchart LR
-    AGENT["Agent / Copilot"] --> APIM["APIM Gateway"]
+    AGENT["Agent workflow"]
+    CONTROL["Control plane<br/>APIM, identity, policy, telemetry"]
 
-    APIM --> FHIR_MCP["fhir-operations MCP Server"]
-    APIM --> CMS_MCP["cms-coverage MCP Server"]
-    APIM --> OTHER_MCP["Other MCP Servers\n(NPI, ICD-10, PubMed, Trials)"]
+    subgraph CAP["Capability Services"]
+        REF["mcp-reference-data"]
+        CLIN["mcp-clinical-research"]
+        RAG["cosmos-rag"]
+        DOC["document-reader"]
+    end
 
-    FHIR_MCP --> AHDS["Azure Health Data Services (FHIR R4 / DICOM / MedTech)"]
-    CMS_MCP --> COSMOS[("Cosmos DB")]
-    OTHER_MCP --> SEARCH["Azure AI Search"]
-    OTHER_MCP --> EXT["External APIs (NPPES, NLM, ClinicalTrials.gov)"]
+    subgraph RECORDS["Systems of Record"]
+        AHDS["AHDS FHIR R4"]
+        COSMOS["Cosmos DB"]
+        SEARCH["Azure AI Search"]
+        EXTERNAL["NPPES, NLM, PubMed, ClinicalTrials.gov"]
+        FILES["Authorized local or uploaded documents"]
+    end
+
+    AGENT --> REF
+    AGENT --> CLIN
+    AGENT --> RAG
+    AGENT --> DOC
+    CONTROL -. governs .-> CAP
+    REF --> EXTERNAL
+    CLIN --> AHDS
+    CLIN --> EXTERNAL
+    RAG --> COSMOS
+    RAG --> SEARCH
+    DOC --> FILES
 ```
+
+| Responsibility | Owner |
+|---|---|
+| Tool schema, input validation, API translation | Capability service |
+| Authorization and permitted tool set | Control plane |
+| Workflow sequencing and checkpoint use | Agent execution plane |
+| Durable clinical or operational truth | System of record |
+| Final consequential decision | Human authority plane |
 
 ---
 
@@ -49,27 +97,36 @@ Healthcare workflows (prior authorization, clinical trials, patient lookup) need
 - Capable of integrating imaging (DICOM) and device data (MedTech → FHIR Observations)
 
 **Decision:**
-Use Azure Health Data Services (AHDS) as the authoritative clinical data store. The `fhir-operations` MCP server (`src/mcp-servers/fhir-operations/`) acts as the bridge, translating MCP tool calls into FHIR R4 REST queries against the AHDS FHIR service.
+Use Azure Health Data Services as the authoritative clinical system of record.
+FHIR tools are exposed through the consolidated `mcp-clinical-research`
+capability service, which translates scoped MCP calls into FHIR R4 REST
+queries.
+
+**Current maturity:** **Partially implemented**. Managed-identity FHIR access
+and private-endpoint infrastructure are represented in the repository, but the
+current deployment keeps the FHIR private endpoint disabled because of an AHDS
+Private Link deployment issue.
 
 **Infrastructure:** `deploy/infra/modules/health-data-services.bicep` deploys:
 - AHDS Workspace with HIPAA-tagged configuration
 - FHIR R4 Service with system-assigned managed identity
-- Private network access (public access disabled by default)
+- Private endpoint support, with current deployment parameters leaving the
+  FHIR private endpoint disabled
 - Entra ID authentication (tenant-scoped audience)
 
-**MCP Tools exposed via `fhir-operations`:**
+**FHIR tools exposed via `mcp-clinical-research`:**
 
 | Tool | FHIR Operation | Description |
 |------|---------------|-------------|
 | `search_patients` | `GET /Patient?...` | Search by name, DOB, identifier |
 | `get_patient` | `GET /Patient/{id}` | Retrieve patient by FHIR ID |
-| `search_observations` | `GET /Observation?...` | Query vitals, labs, clinical observations |
+| `get_patient_observations` | `GET /Observation?...` | Query vitals, labs, clinical observations |
 | `get_patient_conditions` | `GET /Condition?patient={id}` | Active conditions/diagnoses |
 | `get_patient_encounters` | `GET /Encounter?patient={id}` | Visit history |
 
 **Data flow:**
 1. Agent calls MCP tool (e.g., `search_patients`) via APIM
-2. `fhir-operations` Azure Function authenticates to AHDS using managed identity
+2. `mcp-clinical-research` authenticates to AHDS using managed identity
 3. Function translates MCP parameters → FHIR search query
 4. AHDS returns FHIR Bundle → Function extracts and returns structured results
 
@@ -108,7 +165,8 @@ healthcare-db/
 
 **Consequences:**
 - ✅ Sub-10ms reads for policy lookups
-- ✅ HIPAA-compliant with encryption at rest
+- Uses a BAA-eligible Azure service and encryption at rest; production use
+  requires organization-specific compliance validation
 - ✅ Built-in TTL for cache management
 - ⚠️ Higher cost than blob storage for large documents
 
@@ -288,12 +346,15 @@ resource indexDeployment 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
 
 ---
 
-## MCP Server Integration
+## Capability-Service Integration
 
-### CMS Coverage MCP with Cosmos DB
+### Target-State Coverage Capability with Cosmos DB
+
+> **Target-state example:** This illustrates the intended responsibility
+> boundary and is not a path implemented by the current consolidated servers.
 
 ```python
-# src/mcp-servers/cms-coverage/cosmos_client.py
+# src/mcp-servers/<capability-service>/coverage_store.py
 from azure.cosmos.aio import CosmosClient
 from azure.identity.aio import DefaultAzureCredential
 
@@ -352,10 +413,13 @@ class CMSCoverageStore:
             return None
 ```
 
-### Clinical Guidelines MCP with Azure AI Search
+### Target-State Knowledge Capability with Azure AI Search
+
+> **Target-state example:** This illustrates the intended responsibility
+> boundary and is not a path implemented by the current consolidated servers.
 
 ```python
-# src/mcp-servers/guidelines/search_client.py
+# src/mcp-servers/<capability-service>/search_client.py
 from azure.search.documents.aio import SearchClient
 from azure.search.documents.models import VectorizedQuery
 from azure.identity.aio import DefaultAzureCredential
@@ -558,7 +622,10 @@ flowchart LR
 - MCP runtime: recommended extension at `src/mcp-servers/document-knowledge/`.
 - Client connectivity: `.vscode/mcp.json` for local/dev and APIM-hosted MCP URLs for shared environments.
 
-### MCP Tool Contract (Recommended)
+### Target-State Knowledge Capability Contract
+
+> **Target state:** These tools describe a future capability contract. They are
+> not part of the current consolidated MCP tool surface.
 
 | Tool | Purpose | Inputs | Outputs |
 |------|---------|--------|---------|
@@ -578,6 +645,10 @@ To use this layer in prior-auth or protocol skills:
 
 This allows the existing skill workflows to retrieve evidence from large document corpora without changing the core orchestration model.
 
+The capability service may retrieve and cite evidence, but the workflow and
+domain policy remain responsible for deciding when evidence is required and
+how it affects an outcome.
+
 ---
 
 ## Cost Comparison
@@ -594,6 +665,10 @@ This allows the existing skill workflows to retrieve evidence from large documen
 ---
 
 ## Security & Compliance
+
+The controls below are a mix of implemented infrastructure and target-state
+operating requirements. Consult the deployment parameters before assuming a
+private endpoint or public-access setting is active.
 
 ### HIPAA Considerations
 

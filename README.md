@@ -1,6 +1,24 @@
 # Healthcare Agent Accelerator for Azure
 
-**Secure, production-patterned AI agents for healthcare workflows — built on Azure infrastructure and the Model Context Protocol (MCP).**
+**A reference architecture for governed production agents in regulated
+workflows, demonstrated through healthcare on Azure.**
+
+> **Production agents are governed systems of responsibility, not models with
+> tool access.**
+
+This repository shows how to separate agent execution, operational control,
+domain policy, capability access, systems of record, and human authority so
+each concern can be secured, tested, versioned, and operated independently.
+
+Use it in three ways:
+
+1. **Reference architecture** - adopt explicit responsibility boundaries for
+   production-agent systems.
+2. **Evaluation framework** - assess whether an agent design has the controls
+   and evidence required for consequential work.
+3. **Azure accelerator** - study concrete healthcare workflows implemented
+   with skills, Microsoft Agent Framework, MCP, APIM, Azure Functions, and
+   Azure Health Data Services.
 
 ---
 
@@ -30,47 +48,68 @@ Healthcare organizations need to modernize — but building AI agents that handl
 
 ---
 
-## What This Project Does
+## What This Project Demonstrates
 
-This accelerator demonstrates how to build **healthcare AI agents on Azure** using established, secure patterns — not prototypes stitched together with API keys and hope.
+The project applies one architecture through three complementary views:
 
-It provides:
+- **Responsibility Stack:** who owns each concern.
+- **Three Production Planes:** where execution, governance, and human authority
+  operate.
+- **Governed Agent Lifecycle:** how workflows are defined, admitted, executed,
+  checkpointed, decided, observed, and improved.
 
-1. **Consolidated MCP Servers** — Four domain-grouped Azure Function servers exposing 39 healthcare tools (NPI, ICD-10, CMS, FHIR, PubMed, Clinical Trials, Cosmos DB RAG, document reading) via the [Model Context Protocol](https://modelcontextprotocol.io/docs)
-2. **Agent Workflows** — Multi-step orchestration for prior authorization, clinical trial matching, literature search, and patient data — with audit trails and human-in-the-loop checkpoints
-3. **Skills & Prompt Engineering Layer** — Six domain skills with phase-aligned prompt modules, lazy context loading, bead-based progress tracking, and rubric-driven decision logic
-4. **Azure-Native Security** — APIM gateway with OAuth 2.0 / Entra ID, managed identity throughout, Private Link, HIPAA-ready Bicep infrastructure
-5. **Multiple Agent Surfaces** — Works with GitHub Copilot, Azure AI Foundry Agents, and custom orchestration UIs (Gradio + CLI)
+### Current Maturity
+
+| Capability | Maturity | Current Evidence |
+|---|---|---|
+| Phase-scoped domain policy | **Implemented** | Skills, prompt modules, rubrics, and templates under `.github/skills/` |
+| Durable workflow execution | **Partially implemented** | Agent workflows, bead state, waypoints, and resume behavior exist; bounded retry, idempotency, and version-compatible recovery remain incomplete |
+| Scoped capability access | **Implemented** | Consolidated MCP servers and role-specific `allowed_tools` definitions |
+| Human decision authority | **Partially implemented** | Prior-auth approval, denial, pending, and override artifacts exist; broader workflow coverage is incomplete |
+| Production control plane | **Partially implemented** | APIM OAuth policies, managed identity, diagnostics, and Bicep exist; default passthrough usage and several controls remain incomplete |
+| Production evidence | **Partially implemented** | Contract, protocol, latency, and prior-auth runners exist; case coverage, CI enforcement, and operational evidence remain limited |
 
 ### What Makes This Different
 
-| Concern | Typical AI Demo | This Accelerator |
-|---------|----------------|------------------|
-| **Authentication** | Hardcoded API keys | Entra ID + managed identity + APIM gateway |
-| **Data access** | Mock responses | Live FHIR, NPI, CMS, PubMed, ClinicalTrials.gov APIs |
-| **Compliance** | Hand-waved | Private Link, audit logging, HIPAA-tagged infrastructure |
-| **Tooling protocol** | Bespoke function calling | Model Context Protocol (MCP) — open, portable, model-agnostic |
-| **Prompt engineering** | Monolithic system prompt | Phase-aligned prompt modules with lazy loading and context checkpoints |
-| **Deployment** | localhost only | `azd up` → full Azure deployment with APIM, Functions, AHDS |
-| **Auditability** | None | Waypoint-based audit trail with bead tracking per workflow step |
+| Typical Agent Demo | Governed Production-Agent Pattern |
+|---|---|
+| A model receives a broad tool list | Roles receive narrow capability sets through explicit contracts |
+| Conversation history is workflow state | Durable checkpoints record state, evidence, provenance, and progress |
+| Policy lives inside a system prompt | Skills and rubrics version domain procedure separately from orchestration |
+| Infrastructure is an endpoint | A control plane authenticates, authorizes, constrains, observes, and promotes execution |
+| Human review is an informal fallback | Human authority is an explicit architectural plane with attributable decisions |
+| Accuracy is the primary proof | Release gates plus outcome, reliability, human, and economic evidence determine readiness |
 
 ---
 
-## Business Value
+## Intended Business Value
+
+The repository does not claim that the following outcomes have been measured
+in production. They are the outcomes the architecture is designed to support
+and that a production evaluation program must verify.
 
 ### For Healthcare IT Teams
 
-- **40% reduction** in PA processing costs through AI-enabled auto-assessment of low-risk cases
-- **Days → Hours** turnaround on PA decisions, aligning with CMS 2026 mandates
-- **75% fewer** manual errors by grounding decisions in real-time clinical data (NPI, ICD-10, CMS policy)
-- **One architecture** supporting GitHub Copilot, Azure AI Foundry, and custom agent surfaces
+- Reduce administrative effort by automating evidence gathering and draft
+  assessment for appropriate cases.
+- Shorten turnaround while preserving transparent rationale and human
+  authority.
+- Reduce manual inconsistency by grounding recommendations in authoritative
+  clinical and policy sources.
+- Reuse one architecture across GitHub Copilot, Azure AI Foundry, and custom
+  agent surfaces.
 
 ### For Platform & Security Teams
 
-- **Zero secrets in code** — managed identity from MCP server to FHIR endpoint
-- **APIM as the single front door** — rate limiting, JWT validation, audit logging, IP filtering
-- **Infrastructure as Code** — fully deployable via `azd up` with Bicep modules
-- **HIPAA-ready** — Private Link, encryption at rest, diagnostic logging, BAA-eligible services
+- **Managed identity pattern** - avoids embedding service credentials in source
+  code for supported Azure service connections.
+- **APIM control-plane component** - supports JWT validation, routing,
+  diagnostics, and future quota and policy controls.
+- **Infrastructure as Code** - Bicep and `azd` assets describe the Azure
+  deployment.
+- **Compliance-oriented design** - uses BAA-eligible Azure services and
+  security patterns, but requires organization-specific validation before
+  production use.
 
 ### For Developers
 
@@ -80,54 +119,118 @@ It provides:
 
 ---
 
-## Architecture
+## Three Production Planes
 
 ```mermaid
-flowchart TB
-    subgraph surface["Agent Surfaces"]
-        CP["GitHub Copilot<br/>Chat + MCP"]
-        AI["Azure AI Foundry<br/>Agents"]
-        DEV["Custom Dev UIs<br/>(Gradio / CLI)"]
+flowchart LR
+    subgraph HP["Human Authority Plane"]
+        INTENT["Intent and acceptable risk"]
+        REVIEW["Evidence review"]
+        DECIDE["Approve, pend, deny, or override"]
     end
 
-    subgraph gateway["Secure Gateway"]
-        APIM["Azure API Management<br/>OAuth 2.0 | Rate Limiting | Audit"]
+    subgraph AP["Agent Execution Plane"]
+        SURFACE["Copilot, Foundry, CLI, UI"]
+        WORKFLOW["Workflow runtime and checkpoints"]
+        POLICY["Skills, rubrics, and schemas"]
+        MCP["Scoped MCP capability services"]
     end
 
-    subgraph mcp["MCP Server Layer — Azure Functions (Consolidated)"]
-        REF["mcp-reference-data<br/>(12 tools: NPI + ICD-10 + CMS)"]
-        CLIN["mcp-clinical-research<br/>(20 tools: FHIR + PubMed + Trials)"]
-        RAG["cosmos-rag<br/>(6 tools: RAG + Audit)"]
-        DOC["document-reader<br/>(1 tool: File I/O)"]
+    subgraph CP["Control Plane"]
+        ID["Identity and authorization"]
+        CATALOG["Versioned workflow, policy, and tool catalog"]
+        LIMITS["Quota, time, cost, and deployment controls"]
+        OBSERVE["Audit, telemetry, evaluation, and promotion"]
     end
 
-    subgraph data["Azure Health Data Services + External APIs"]
-        FHIR["FHIR R4 Service"]
-        NPPES["NPPES Registry"]
-        NLM["NLM Clinical Tables"]
-        CMSAPI["CMS Coverage Data"]
-        NCBI["NCBI E-Utilities"]
-        CTGOV["ClinicalTrials.gov"]
-        COSMOS["Cosmos DB<br/>(RAG + Audit)"]
-    end
+    RECORDS["Systems of record<br/>FHIR, Cosmos DB, AI Search, external registries"]
 
-    CP --> APIM
-    AI --> APIM
-    DEV --> APIM
+    INTENT --> SURFACE
+    SURFACE --> WORKFLOW
+    POLICY --> WORKFLOW
+    WORKFLOW --> MCP
+    MCP --> RECORDS
+    WORKFLOW --> REVIEW
+    REVIEW --> DECIDE
 
-    APIM --> REF
-    APIM --> CLIN
-    APIM --> RAG
-    APIM --> DOC
-
-    REF --> NPPES
-    REF --> NLM
-    REF --> CMSAPI
-    CLIN --> FHIR
-    CLIN --> NCBI
-    CLIN --> CTGOV
-    RAG --> COSMOS
+    ID -. governs .-> SURFACE
+    CATALOG -. governs .-> WORKFLOW
+    LIMITS -. constrains .-> MCP
+    OBSERVE -. records and evaluates .-> WORKFLOW
+    OBSERVE -. records .-> DECIDE
 ```
+
+The planes have asymmetric authority:
+
+- The **agent execution plane** may reason, retrieve, invoke permitted
+  capabilities, checkpoint work, and recommend. It cannot grant itself access
+  or finalize consequential decisions.
+- The **control plane** may permit, constrain, block, route, record, evaluate,
+  and promote. It cannot silently substitute infrastructure policy for domain
+  or human judgment.
+- The **human authority plane** establishes intent and owns attributable
+  consequential decisions under control-plane policy.
+
+## Responsibility Stack
+
+| Layer | Owns | Must Not Own | Exposed Contract | Required Evidence | Repository Mapping |
+|---|---|---|---|---|---|
+| Human authority | Intent, consequential approval, attributable override, accountability | Hidden or unaudited intervention | Authenticated decision and justification | Actor, timestamp, evidence reviewed, decision, override reason | Prior-auth decision and notification phases |
+| Experience surfaces | Intent capture, progress display, evidence presentation | Domain policy or infrastructure authorization | Validated request and review interaction | Input validation, user-visible state, decision receipt | GitHub Copilot, Azure AI Foundry, CLI, Gradio |
+| Workflow runtime | Coordination, state transitions, concurrency, checkpoints, resume, failure routing | Domain truth or permission grants | Versioned workflow state and transition result | Checkpoints, active versions, transition and recovery records | `src/agents/workflows/` |
+| Domain policy | Procedures, rubrics, evidence requirements, schemas, decision criteria | Direct infrastructure access | Versioned skill, rubric, and output schema | Policy version, criteria evaluation, schema result | `.github/skills/` |
+| Capability services | Narrow typed operations and external-system integration | Workflow decisions or user authorization | Typed MCP tool request and response | Tool version, authorization context, latency, result or error | `src/mcp-servers/` |
+| Systems of record | Durable authoritative facts and records | Agent reasoning | Authoritative API or persistence contract | Record identifiers, source version, timestamps, provenance | FHIR, Cosmos DB, Azure AI Search, external registries |
+
+Governance cuts across every layer: identity, authorization, policy
+enforcement, quotas, telemetry, audit correlation, deployment control, and
+version management.
+
+## Governed Agent Lifecycle
+
+1. **Define** versioned skills, rubrics, schemas, tool contracts, and
+   evaluation criteria.
+2. **Admit** authenticated requests under a selected workflow, policy, and
+   permitted capability set.
+3. **Execute** reasoning and tool calls within permission, time, and cost
+   boundaries.
+4. **Checkpoint** state, evidence, provenance, active versions, and validation
+   results.
+5. **Decide** through the human authority plane when outcomes are
+   consequential.
+6. **Observe** workflow, model, tool, security, latency, cost, and outcome
+   telemetry.
+7. **Improve** through replay, regression evaluation, versioning, and
+   controlled promotion.
+
+### Tiered Failure and Recovery
+
+| Failure Class | Required Response |
+|---|---|
+| Transient dependency failure | Bounded retry with backoff; resume only from a valid checkpoint |
+| Invalid input or contract | Stop and request correction |
+| Missing optional evidence | Degrade only when domain policy permits it; record the gap and restrict outcomes |
+| Model or schema failure | Reject output, attempt bounded structured regeneration, then escalate |
+| Authorization, safety, or policy violation | Fail closed and create an auditable event |
+| Uncertain side effect | Reconcile with an idempotency key or route to human review; never replay blindly |
+
+Escalation packages include the original request, completed evidence, latest
+valid checkpoint, failure classification, attempted recovery, active workflow,
+policy, schema, model, and tool versions, and the recommended next action.
+
+### Production Evidence
+
+Release gates prevent strong aggregate metrics from hiding unacceptable risk:
+
+- No unauthorized data or capability access.
+- Required evidence, provenance, and audit lineage are complete.
+- Outputs conform to active schema and policy versions.
+- Safety-critical outcomes remain within defined thresholds.
+- Recovery does not duplicate or lose consequential side effects.
+
+After gates pass, evaluate outcome value, decision quality, operational
+reliability, human effectiveness, and economics. Results must be segmented by
+workflow, policy, model, tool versions, risk tier, and case cohort.
 
 ---
 
@@ -217,18 +320,25 @@ The project uses **4 consolidated MCP servers** — each bundles multiple tool d
 
 ## Skills & Prompt Engineering
 
-The project uses a **skills layer** that injects domain knowledge, structured prompt modules, and decision rubrics into AI agent context. Skills are designed for composability — each can be used independently in GitHub Copilot, Azure AI Foundry, or custom agents.
+The project uses a **skills layer** that injects domain knowledge, structured
+prompt modules, and decision rubrics into AI agent context. Skills are designed
+for composability and keep domain procedure separate from workflow runtime.
 
 ### Skills Catalog
 
-| Skill | Description | MCP Servers Used |
-|-------|-------------|------------------|
-| **prior-auth-azure** | End-to-end PA review with two-subskill workflow, 5 prompt modules, rubric | mcp-reference-data, mcp-clinical-research, cosmos-rag |
-| **pa-report-formatter** | Formats assessment/decision data into professional reports with Material Design iconography | None (formatting only) |
-| **clinical-trial-protocol** | Multi-phase clinical trial protocol generation with literature-backed evidence | mcp-clinical-research |
-| **document-reader** | Load local documents (PDFs, images, JSON/CSV) for agent consumption | document-reader |
-| **azure-fhir-developer** | FHIR R4 development patterns with Azure-specific auth and coding systems | mcp-clinical-research |
-| **azure-health-data-services** | DICOM imaging, MedTech device data, and FHIR integration on Azure | mcp-clinical-research |
+| Skill | Responsibility | MCP Servers Used |
+|---|---|---|
+| **prior-auth-azure** | Prior-authorization domain procedure, rubric, and output contract | mcp-reference-data, mcp-clinical-research, cosmos-rag |
+| **pa-report-formatter** | Formats assessment and decision artifacts | None |
+| **document-reader** | Loads authorized local documents for agent consumption | document-reader |
+| **azure-fhir-developer** | FHIR R4 development guidance and Azure authentication patterns | mcp-clinical-research |
+| **azure-health-data-services** | DICOM, MedTech, and FHIR integration guidance | mcp-clinical-research |
+
+Clinical-trial protocol generation exists as a two-step runtime workflow in
+`src/agents/workflows/clinical_trials.py`. Legacy assets remain under
+`.github/skills/clinical-trial-protocol/`, but the directory has no `SKILL.md`
+entry point and is not an active skill package. Its older six-bead description
+is therefore not part of the implemented skill inventory.
 
 ### Prompt Engineering Architecture
 
@@ -326,7 +436,8 @@ flowchart LR
 
 ### Also Included
 
-- **Clinical Trial Matching** — Multi-phase protocol generation with FHIR patient data, PubMed evidence, and ClinicalTrials.gov integration
+- **Clinical Trial Protocol Drafting** - Two-step research and protocol-draft
+  workflow using ClinicalTrials.gov and PubMed capabilities.
 - **Literature Search** — PubMed-powered research workflows with clinical query filters
 - **Patient Data** — FHIR-based patient data retrieval and clinical summarization
 
@@ -402,7 +513,6 @@ healthcare-agent-accelerator/
 │   │   ├── references/rubric.md   #     Externalized decision criteria
 │   │   └── templates/             #     Request/output templates
 │   ├── pa-report-formatter/       #   Report formatting with Material Design icons
-│   ├── clinical-trial-protocol/   #   Multi-phase trial protocol generation
 │   ├── document-reader/           #   Local file ingestion (PDF, image, CSV, JSON)
 │   ├── azure-fhir-developer/     #   FHIR R4 patterns + Azure auth
 │   └── azure-health-data-services/
@@ -429,17 +539,17 @@ healthcare-agent-accelerator/
 
 ---
 
-## Security & Compliance
+## Security and Compliance Maturity
 
-| Layer | Control | Implementation |
-|-------|---------|----------------|
-| **Gateway** | OAuth 2.0 + JWT validation | Azure API Management with Entra ID |
-| **Identity** | No secrets in code | Managed Identity on all Function Apps |
-| **Network** | Private endpoints | Private Link for FHIR, Cosmos DB, Key Vault |
-| **Encryption** | TLS 1.2+ in transit, AES at rest | Azure-managed encryption |
-| **Audit** | Full request logging | APIM diagnostic logs → Log Analytics + Cosmos DB audit trail |
-| **Access** | Role-based access control | FHIR Data Contributor, Cosmos DB RBAC |
-| **Compliance** | HIPAA-ready infrastructure | BAA-eligible services, HIPAA tags in Bicep |
+| Control | Maturity | Current State |
+|---|---|---|
+| Entra ID OAuth and JWT validation | **Partially implemented** | OAuth APIM policies exist; the default agent configuration currently targets passthrough endpoints |
+| Managed identity | **Implemented** | Azure workloads use managed identities for supported service connections |
+| Private networking | **Partially implemented** | Private endpoint modules exist; FHIR private endpoint deployment is currently disabled |
+| APIM and Function diagnostics | **Implemented** | Diagnostic settings route platform telemetry to Azure monitoring resources |
+| Workflow audit lineage | **Partially implemented** | Waypoints and Cosmos audit tools exist; completeness and failure guarantees require stronger evidence |
+| Rate limits, WAF, and production alerting | **Target state** | Documented patterns are not uniformly enforced by the current deployment |
+| Healthcare compliance | **Target state** | The design uses compliance-oriented Azure services and patterns but requires organization-specific certification, validation, and clinical governance |
 
 ---
 

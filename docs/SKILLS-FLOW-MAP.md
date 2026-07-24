@@ -1,24 +1,54 @@
 # Skills Flow Map
 
-This document visualizes how GitHub Copilot, MCP server configuration, and the `.github/skills` workflows work together in this repository.
+This document maps the repository's skills and workflows to the production
+agent responsibility model defined in [`README.md`](../README.md).
 
-## 1) System Flow (Copilot + MCP)
+## 1) Production-Agent Responsibility Map
 
 ```mermaid
 flowchart LR
-    U["Developer in VS Code"] --> VSC["VS Code Chat Surface"]
-    VSC --> LM["GitHub Copilot Agent"]
-    LM --> SK[".github/skills/* context"]
-    LM --> M[".vscode/mcp.json"]
-    M --> L["Local MCP<br/>localhost:7071-7076"]
-    M --> F["Function App MCP<br/>https://*.azurewebsites.net/mcp"]
-    M --> A["APIM MCP<br/>https://*.azure-api.net/mcp*/..."]
-    L --> X[src/mcp-servers/*]
-    F --> X
-    A --> X
-    X --> E["Healthcare data APIs"]
-    LM --> R1["Response in chat"]
+    subgraph HUMAN["Human Authority Plane"]
+        H1["Intent and acceptable risk"]
+        H2["Review and attributable decision"]
+    end
+
+    subgraph EXEC["Agent Execution Plane"]
+        SURFACE["Copilot, Foundry, CLI, UI"]
+        SKILLS["Domain policy<br/>.github/skills/"]
+        RUNTIME["Workflow runtime<br/>src/agents/workflows/"]
+        MCP["Capability services<br/>src/mcp-servers/"]
+    end
+
+    subgraph CONTROL["Control Plane"]
+        APIM["APIM and Entra ID"]
+        VERSIONS["Workflow, policy, schema, model, and tool versions"]
+        EVALS["Audit, telemetry, evaluation, and promotion"]
+    end
+
+    RECORDS["Systems of record<br/>FHIR, Cosmos DB, AI Search, external APIs"]
+
+    H1 --> SURFACE
+    SURFACE --> RUNTIME
+    SKILLS --> RUNTIME
+    RUNTIME --> MCP
+    MCP --> RECORDS
+    RUNTIME --> H2
+
+    APIM -. authenticates and authorizes .-> SURFACE
+    VERSIONS -. constrains .-> RUNTIME
+    EVALS -. observes .-> RUNTIME
+    EVALS -. records .-> H2
 ```
+
+| Responsibility | Repository Owner |
+|---|---|
+| Human approval and override | Prior-auth decision and notification phases |
+| User interaction | Copilot, Foundry, CLI, and development UIs |
+| Workflow state and orchestration | `src/agents/workflows/` |
+| Domain procedure and decision policy | `.github/skills/` |
+| External capabilities | `src/mcp-servers/` |
+| Identity, gateway policy, telemetry, deployment | APIM, Entra ID, Bicep, Azure Monitor |
+| Authoritative facts and durable records | FHIR, Cosmos DB, AI Search, external registries |
 
 ## 2) Copilot Skills Loading Path
 
@@ -56,7 +86,19 @@ sequenceDiagram
     VS-->>Dev: Tool-augmented response
 ```
 
-## 4) Prior Authorization Skill Flow
+## 4) Prior Authorization Across the Three Planes
+
+| Plane | Prior-Authorization Responsibility |
+|---|---|
+| Agent execution | Compliance, clinical, coverage, and synthesis work; checkpoint persistence |
+| Control | Actor and tool authorization, version selection, telemetry, audit correlation, evaluation |
+| Human authority | Final approve, pend, deny, or attributable override |
+
+The current workflow strongly demonstrates agent execution and human authority.
+Control-plane enforcement and production evidence are only partially
+implemented and must not be inferred from the workflow diagram alone.
+
+## 5) Prior Authorization Skill Flow
 
 Source files:
 - `.github/skills/prior-auth-azure/SKILL.md`
@@ -109,48 +151,37 @@ flowchart TD
 | `bd-pa-004-decision` | Human review + decision capture | Human | `waypoints/decision.json` |
 | `bd-pa-005-notify` | Determination JSON + notification letters | (code generation) | `waypoints/decision.json` |
 
-## 5) Clinical Trial Protocol Skill Flow
+## 6) Clinical Trial Protocol Workflow
 
-Source files:
-- `.github/skills/clinical-trial-protocol/SKILL.md`
-- `.github/skills/clinical-trial-protocol/references/00-05*.md`
-- `.github/skills/clinical-trial-protocol/scripts/sample_size_calculator.py`
+Current source files:
+
+- `src/agents/workflows/clinical_trials.py`
+- `src/agents/agents.py`
+- `src/agents/tools.py`
 
 ```mermaid
-flowchart TD
-    S0["bd-ct-000-init\n00-initialize-intervention.md"] --> W0[waypoints/intervention_metadata.json]
-    W0 --> S1["bd-ct-001-research\n01-research-protocols.md"]
-    S1 --> CT[Clinical Trials MCP<br/>trials_search + trials_details]
-    CT --> W1[waypoints/01_clinical_research_summary.json]
+flowchart LR
+    INPUT["Protocol research request"]
+    RESEARCH["Trials Research Agent<br/>ClinicalTrials.gov + PubMed"]
+    RW["01_clinical_research_summary.json"]
+    DRAFT["Protocol Draft Agent"]
+    PW["protocol_draft.json"]
 
-    W1 --> S2["bd-ct-002-foundation\n02-protocol-foundation.md"]
-    S2 --> W2[waypoints/02_protocol_foundation.md<br/>+ 02_protocol_metadata.json]
-
-    W2 --> S3["bd-ct-003-intervention\n03-protocol-intervention.md"]
-    S3 --> W3[waypoints/03_protocol_intervention.md]
-
-    W3 --> S4["bd-ct-004-operations\n04-protocol-operations.md"]
-    S4 --> PY[sample_size_calculator.py]
-    PY --> W4[waypoints/04_protocol_operations.md]
-
-    W4 --> S5["bd-ct-005-concatenate\n05-concatenate-protocol.md"]
-    S5 --> OUT[waypoints/protocol_complete.md]
+    INPUT --> RESEARCH
+    RESEARCH --> RW
+    RW --> DRAFT
+    DRAFT --> PW
 ```
 
-### Clinical Trial Bead Tracking
+| Responsibility | Current Mechanism | Maturity |
+|---|---|---|
+| Research execution | Trials Research Agent with scoped clinical-research tools | **Implemented** |
+| Research checkpoint | `01_clinical_research_summary.json` | **Implemented** |
+| Protocol draft | Draft agent using research output | **Implemented** |
+| Final checkpoint | `protocol_draft.json` | **Implemented** |
+| Six-bead skill package and resume model | Inactive legacy assets; `.github/skills/clinical-trial-protocol/` has no `SKILL.md` | **Target state** |
 
-| Bead ID | Step | Status Persisted In |
-|---------|------|---------------------|
-| `bd-ct-000-init` | Initialize intervention | `waypoints/intervention_metadata.json` |
-| `bd-ct-001-research` | Research protocols | `waypoints/intervention_metadata.json` |
-| `bd-ct-002-foundation` | Protocol foundation | `waypoints/intervention_metadata.json` |
-| `bd-ct-003-intervention` | Intervention details | `waypoints/intervention_metadata.json` |
-| `bd-ct-004-operations` | Operations & statistics | `waypoints/intervention_metadata.json` |
-| `bd-ct-005-concatenate` | Concatenate final | `waypoints/intervention_metadata.json` |
-
-Resume behavior reads bead state from `intervention_metadata.json` first, falling back to file-existence detection.
-
-## 6) Skills Directory Anatomy
+## 7) Skills Directory Anatomy
 
 ```mermaid
 flowchart LR
@@ -167,7 +198,7 @@ flowchart LR
     SCR --> CALC[Optional helper scripts]
 ```
 
-## 7) OCR and RAG Knowledge Layer Extension
+## 8) OCR and RAG Knowledge Layer Extension
 
 ```mermaid
 flowchart LR
@@ -177,9 +208,9 @@ flowchart LR
     IDX --> KMCP[Document Knowledge MCP]
 
     KMCP --> PA[prior-auth-azure skill flow]
-    KMCP --> CTP[clinical-trial-protocol skill flow]
+    KMCP --> CTWF[Clinical trial protocol runtime workflow]
     PA --> OUT1[Evidence-backed PA outputs]
-    CTP --> OUT2[Citation-backed protocol outputs]
+    CTWF --> OUT2[Citation-backed protocol outputs]
 ```
 
 Adoption touchpoints:
@@ -187,17 +218,27 @@ Adoption touchpoints:
 - Skill layer: add retrieval prerequisites in `SKILL.md` and tool definitions in `references/tools.md`.
 - Prompt layer: require retrieval before synthesis and enforce source citations.
 
-## 8) Beads Task Tracking Pattern
+## 9) Workflow Progress Tracking
 
-All skills use **beads** (`bd-*`) to track progress through multi-step workflows. Each bead represents a discrete phase, has a unique ID, and follows a `not-started → in-progress → completed` lifecycle.
+The prior-auth skill uses bead tracking for durable multi-step execution. The
+current clinical-trial runtime uses two sequential waypoints and does not have
+the previously documented six-bead skill package.
 
 ```mermaid
 flowchart LR
     NS[not-started] --> IP[in-progress]
     IP --> C[completed]
-    IP -.->|error/retry| IP
+    IP --> CLASSIFY{Classify failure}
+    CLASSIFY -->|transient| IP
+    CLASSIFY -->|invalid input| NS
+    CLASSIFY -->|policy or safety| STOP[Fail closed]
+    CLASSIFY -->|uncertain side effect| HUMAN[Human reconciliation]
     C -.->|never goes back| C
 ```
+
+Recovery from a checkpoint is valid only when completed operations are
+idempotent or reconciled and the active workflow, policy, schema, model, and
+tool versions remain compatible.
 
 ### Rules
 
@@ -206,6 +247,21 @@ flowchart LR
 3. **Persisted in waypoints** — bead state is written to JSON waypoint files under a `"beads"` key
 4. **Resume from beads** — on startup, read bead array and resume from first non-completed bead
 5. **Audit trail** — each completed bead records a `completed_at` timestamp
+
+### Governed Lifecycle Mapping
+
+| Lifecycle Stage | Current Workflow Mechanism | Maturity |
+|---|---|---|
+| Define | Skills, prompt modules, rubrics, templates | **Implemented** |
+| Admit | CLI input parsing and workflow selection | **Partially implemented** |
+| Execute | Agent Framework orchestration and scoped MCP tools | **Implemented** |
+| Checkpoint | Waypoint JSON and bead state | **Implemented** |
+| Decide | Prior-auth human decision and override artifacts | **Partially implemented** |
+| Observe | Logs, audit tool calls, and evaluation runners | **Partially implemented** |
+| Improve | Manual evaluation and version changes; controlled promotion loop is not present | **Target state** |
+
+Bead state is an execution-plane mechanism. It does not replace control-plane
+authorization, operational telemetry, or human accountability.
 
 ### Bead State Schema
 
@@ -219,16 +275,17 @@ flowchart LR
 }
 ```
 
-### Skill Bead Registries
+### Workflow Tracking Registry
 
-| Skill | Bead Prefix | Bead Count | Persisted In |
-|-------|-------------|------------|---------------|
-| Prior Authorization | `bd-pa-*` | 5 beads | `assessment.json`, `decision.json` |
-| Clinical Trial Protocol | `bd-ct-*` | 6 beads | `intervention_metadata.json` |
+| Workflow or Skill | Tracking Model | Maturity |
+|---|---|---|
+| Prior Authorization | Five beads in `assessment.json` and `decision.json` | **Implemented** |
+| Clinical Trial Protocol Runtime | Research and protocol-draft waypoints | **Implemented** |
+| Clinical Trial Six-Bead Skill | Inactive legacy assets without `SKILL.md` | **Target state** |
 
 ---
 
-## 9) Practical Reading Order
+## 10) Practical Reading Order
 
 1. Open `SKILL.md` for orchestration rules.
 2. Follow `references/*.md` in execution order.

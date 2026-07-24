@@ -2,65 +2,89 @@
 
 ## Overview
 
-This document outlines how Azure API Management (APIM) provides the secure gateway layer for exposing MCP (Model Context Protocol) servers, replacing the hosted endpoints from the Anthropic architecture (mcp.deepsense.ai, pubmed.mcp.claude.com).
+Azure API Management is one component of the production-agent control plane.
+It provides gateway identity, request policy, routing, and diagnostics for MCP
+capability services. It does not own workflow state, domain policy, model
+behavior, evaluation promotion, or human authority.
 
-## Architecture Comparison
+This document uses three maturity labels:
 
-### Anthropic Healthcare Marketplace (Reference)
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                    Claude Code / Claude Desktop                  │
-├──────────────────────────────────────────────────────────────────┤
-│  Skills (Static Knowledge)      │    MCP Plugins (Dynamic)       │
-│  ├── fhir-developer-skill       │    ├── cms-coverage            │
-│  ├── prior-auth-review-skill    │    │   └── mcp.deepsense.ai    │
-│  └── clinical-trial-protocol    │    ├── npi-registry            │
-│                                 │    │   └── mcp.deepsense.ai    │
-│                                 │    ├── pubmed                  │
-│                                 │    │   └── pubmed.mcp.claude.com
-│                                 │    └── icd10-codes             │
-└──────────────────────────────────────────────────────────────────┘
+- **Implemented:** present in executable infrastructure or policy.
+- **Partially implemented:** present but not uniformly enforced or proven.
+- **Target state:** recommended architecture that is not currently operating
+  across the deployment.
+
+For the canonical production-agent narrative, see
+[`README.md`](../../README.md).
+
+## Azure Healthcare Agent Architecture
+
+```mermaid
+flowchart LR
+    CLIENTS["Copilot, Foundry, CLI, UI"]
+
+    subgraph CONTROL["Control Plane"]
+        ENTRA["Entra ID"]
+        APIM["APIM<br/>JWT validation, routing, diagnostics"]
+        VERSION["Version and deployment policy"]
+        OBS["Monitoring and evaluation"]
+    end
+
+    subgraph EXEC["Agent Execution Plane"]
+        WORKFLOW["Agent workflows"]
+        SKILLS["Skills and rubrics"]
+        REF["mcp-reference-data"]
+        CLIN["mcp-clinical-research"]
+        RAG["cosmos-rag"]
+        DOC["document-reader<br/>local capability"]
+    end
+
+    HUMAN["Human Authority Plane"]
+    RECORDS["FHIR, Cosmos DB, Azure AI Search, external APIs"]
+
+    CLIENTS --> WORKFLOW
+    SKILLS --> WORKFLOW
+    WORKFLOW --> APIM
+    WORKFLOW --> HUMAN
+    ENTRA --> APIM
+    APIM --> REF
+    APIM --> CLIN
+    APIM --> RAG
+    WORKFLOW --> DOC
+    REF --> RECORDS
+    CLIN --> RECORDS
+    RAG --> RECORDS
+    DOC --> RECORDS
+    VERSION -. governs .-> WORKFLOW
+    OBS -. observes .-> APIM
+    OBS -. observes .-> WORKFLOW
 ```
 
-### Azure Healthcare Marketplace (Target)
-```
-┌─────────────────────────────────────────────────────────────────┐
-│         GitHub Copilot / Azure AI Foundry Agents                │
-├─────────────────────────────────────────────────────────────────┤
-│  Skills (Static Knowledge)      │    MCP Servers (Dynamic)      │
-│  ├── azure-fhir-developer       │    via Azure APIM Gateway     │
-│  ├── prior-auth-azure           │                               │
-│  ├── azure-health-data-services │    ┌─────────────────────────┐│
-│  └── clinical-trial-protocol    │    │  APIM Gateway Layer     ││
-│                                 │    │  ├── OAuth 2.0 / JWT    ││
-│                                 │    │  ├── Rate Limiting      ││
-│                                 │    │  ├── IP Filtering       ││
-│                                 │    │  └── Audit Logging      ││
-│                                 │    └─────────┬───────────────┘│
-│                                 │              │                │
-│                                 │    ┌─────────▼───────────────┐│
-│                                 │    │ Backend MCP Servers     ││
-│                                 │    │ (Azure Functions/       ││
-│                                 │    │  Container Apps)        ││
-│                                 │    │ ├── cms-coverage-mcp    ││
-│                                 │    │ ├── npi-registry-mcp    ││
-│                                 │    │ ├── fhir-operations-mcp ││
-│                                 │    │ ├── icd10-codes-mcp     ││
-│                                 │    │ └── clinical-trials-mcp ││
-│                                 │    └─────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-```
+## APIM Responsibility Boundary
+
+| APIM Owns | APIM Does Not Own |
+|---|---|
+| Token validation and gateway authorization | Domain decision criteria |
+| Backend routing and credential injection | Workflow state and resume |
+| Request quotas and gateway policy when configured | Model selection and prompt policy |
+| Gateway diagnostics and correlation identifiers | Human approval or override |
+| Public API exposure and backend isolation | End-to-end outcome evaluation |
+
+APIM policy is necessary but insufficient for a production-agent control
+plane. Version catalogs, evaluation gates, incident controls, and promotion
+policy must be provided by the broader platform.
 
 ## APIM Configuration Strategy
 
 ### Azure Health Data Services and FHIR API Fit
 
-The `fhir-operations` MCP server is the bridge between APIM-exposed MCP tools and Azure Health Data Services (AHDS) FHIR data.
+The consolidated `mcp-clinical-research` capability service is the bridge
+between APIM-exposed FHIR tools and Azure Health Data Services (AHDS).
 
 ```mermaid
 flowchart LR
     CLIENT[Copilot or Agent Client] --> APIM[APIM MCP endpoint]
-    APIM --> FMCP[fhir-operations MCP server]
+    APIM --> FMCP[mcp-clinical-research]
     FMCP --> FHIR[AHDS FHIR service]
     DICOM[AHDS DICOM service] --> FHIR
     MEDTECH[AHDS MedTech service] --> FHIR
@@ -74,7 +98,8 @@ flowchart LR
 - `deploy/infra/main.bicep` passes `healthDataServices.outputs.fhirServerUrl` into the Function Apps module.
 - `deploy/infra/modules/function-apps.bicep` sets `FHIR_SERVER_URL` for each MCP Function App.
 3. Runtime behavior:
-- `src/mcp-servers/fhir-operations/function_app.py` reads `FHIR_SERVER_URL`.
+- `src/mcp-servers/mcp-clinical-research/fhir_tools.py` reads the configured
+  FHIR endpoint.
 - If configured, it uses `DefaultAzureCredential` and calls the FHIR endpoint.
 - If not configured, it falls back to demo behavior/public test server responses.
 4. Authorization:
@@ -85,7 +110,7 @@ flowchart LR
 - AHDS Workspace is the healthcare data platform boundary.
 - FHIR service is the normalized API layer your MCP tools query.
 - APIM is the secure front door that exposes MCP endpoints to clients.
-- `fhir-operations` MCP is where MCP requests become FHIR REST calls.
+- `mcp-clinical-research` is where FHIR MCP requests become FHIR REST calls.
 
 When debugging FHIR behavior, check this order:
 
@@ -104,8 +129,7 @@ products:
     displayName: Healthcare MCP Basic
     description: Basic healthcare MCP tools for development
     apis:
-      - fhir-operations
-      - icd10-codes
+      - reference-data
     subscriptionRequired: true
     approvalRequired: false
 
@@ -113,14 +137,25 @@ products:
     displayName: Healthcare MCP Clinical
     description: Clinical workflow MCP tools
     apis:
-      - cms-coverage
-      - npi-registry
-      - clinical-trials
+      - clinical-research
+      - cosmos-rag
     subscriptionRequired: true
     approvalRequired: true  # Requires approval for PHI-capable APIs
 ```
 
 ### 2. Security Policies
+
+### Current Control Maturity
+
+| Control | Maturity | Evidence or Gap |
+|---|---|---|
+| OAuth PRM and JWT policy assets | **Implemented** | `deploy/infra/modules/apim-mcp-oauth.bicep` and `deploy/infra/policies/mcp-api.policy.xml` |
+| Default agent access path | **Partially implemented** | `src/agents/config.py` defaults to APIM passthrough endpoints |
+| APIM diagnostics | **Implemented** | APIM diagnostic resources are defined in Bicep |
+| Rate limiting and quotas | **Target state** | Examples are documented but not uniformly present in deployed policy |
+| IP filtering and WAF | **Target state** | Recommended controls, not current universal enforcement |
+| FHIR private connectivity | **Partially implemented** | Private endpoint module exists; deployment currently disables the FHIR private endpoint |
+| Monitoring dashboard and alerts | **Target state** | Queries are documented; operational dashboard and alert coverage remain incomplete |
 
 #### OAuth 2.0 / Microsoft Entra ID Integration
 
@@ -145,6 +180,9 @@ products:
 
 #### Rate Limiting Policy
 
+> **Target state:** The following rate-limit policy demonstrates the intended
+> control-plane behavior; it is not currently enforced across every MCP API.
+
 ```xml
 <inbound>
     <rate-limit-by-key
@@ -161,30 +199,32 @@ products:
 </inbound>
 ```
 
-### 3. MCP Server URL Mapping
+### 3. MCP Endpoint Mapping
 
-| Anthropic MCP Server | Azure APIM Endpoint | Backend Service |
-|---------------------|---------------------|-----------------|
-| `mcp.deepsense.ai/cms_coverage/mcp` | `{apim}.azure-api.net/healthcare/cms-coverage` | Azure Function: `cms-coverage-mcp` |
-| `mcp.deepsense.ai/npi_registry/mcp` | `{apim}.azure-api.net/healthcare/npi-registry` | Azure Function: `npi-registry-mcp` |
-| `pubmed.mcp.claude.com/mcp` | `{apim}.azure-api.net/healthcare/pubmed` | Azure Function: `pubmed-search-mcp` |
-| (new) | `{apim}.azure-api.net/healthcare/fhir` | Container App: `fhir-operations-mcp` |
-| (new) | `{apim}.azure-api.net/healthcare/icd10` | Azure Function: `icd10-codes-mcp` |
-| (new) | `{apim}.azure-api.net/healthcare/clinical-trials` | Azure Function: `clinical-trials-mcp` |
+| Capability Service | OAuth Path | Passthrough Path | Backend |
+|---|---|---|---|
+| Reference data | `{gateway}/mcp/reference-data/mcp` | `{gateway}/mcp-pt/reference-data/mcp` | `mcp-reference-data` Function App |
+| Clinical research | `{gateway}/mcp/clinical-research/mcp` | `{gateway}/mcp-pt/clinical-research/mcp` | `mcp-clinical-research` Function App |
+| RAG and audit | `{gateway}/mcp/cosmos-rag/mcp` | `{gateway}/mcp-pt/cosmos-rag/mcp` | `cosmos-rag` Function App |
+| Document reading | Not routed by the current APIM deployment | Local/direct | `document-reader` service |
+
+The OAuth path is the intended production access path. The current Python
+agent configuration defaults to the passthrough base path, so runtime access
+is **Partially implemented** relative to the target control-plane model.
 
 ### 4. Backend Configuration
 
 ```bicep
 resource apimBackend 'Microsoft.ApiManagement/service/backends@2023-05-01-preview' = {
-  name: 'cms-coverage-mcp-backend'
+  name: 'reference-data-backend'
   parent: apimService
   properties: {
-    description: 'CMS Coverage MCP Server'
-    url: 'https://${cmsCoverageFunctionApp.properties.defaultHostName}/api'
+    description: 'Consolidated reference-data MCP capability service'
+    url: 'https://${referenceDataFunctionApp.properties.defaultHostName}'
     protocol: 'http'
     credentials: {
       header: {
-        'x-functions-key': ['{{cms-coverage-function-key}}']
+        'x-functions-key': ['{{reference-data-function-key}}']
       }
     }
     tls: {
@@ -242,12 +282,19 @@ Ensure MCP-compliant responses:
 
 ## Audit and Compliance
 
+> **Partially implemented:** APIM and Function diagnostic resources exist, and
+> workflows can write audit events. End-to-end lineage completeness, alerting,
+> retention policy, and recovery guarantees still require production evidence.
+
 ### HIPAA Compliance Considerations
 
-1. **Encryption in Transit**: TLS 1.2+ enforced on all APIM endpoints
-2. **Audit Logging**: All MCP requests logged to Azure Monitor
-3. **Access Control**: RBAC + OAuth 2.0 for all API access
-4. **Data Residency**: Deploy APIM in compliant Azure regions
+1. **Implemented:** TLS 1.2+ on APIM endpoints.
+2. **Partially implemented:** APIM and Function diagnostics; end-to-end audit
+   completeness requires production evidence.
+3. **Partially implemented:** OAuth-protected endpoints exist alongside
+   passthrough development endpoints.
+4. **Target state:** Organization-approved region, retention, privacy, and
+   compliance configuration.
 
 ### Audit Log Policy
 
@@ -272,21 +319,22 @@ Ensure MCP-compliant responses:
 ### Infrastructure as Code (Bicep)
 
 ```
-infrastructure/
+deploy/infra/
 ├── main.bicep                 # Main deployment orchestrator
 ├── modules/
 │   ├── apim.bicep            # APIM instance configuration
-│   ├── apim-apis.bicep       # API definitions
-│   ├── apim-policies.bicep   # Policy fragments
-│   ├── functions.bicep       # Azure Functions for MCP servers
-│   └── container-apps.bicep  # Container Apps for complex MCP servers
-└── parameters/
-    ├── dev.parameters.json
-    ├── staging.parameters.json
-    └── prod.parameters.json
+│   ├── apim-mcp-oauth.bicep  # OAuth MCP APIs and PRM resources
+│   ├── function-apps.bicep   # Consolidated MCP Function Apps
+│   └── private-endpoints.bicep
+└── policies/
+    └── mcp-api.policy.xml    # JWT validation policy
 ```
 
 ### Environment Endpoints
+
+> **Target state:** Use environment-specific gateway names and policy
+> promotion. The table below is a naming convention, not evidence that all
+> three environments are currently deployed.
 
 | Environment | APIM Gateway URL |
 |-------------|------------------|
@@ -294,20 +342,21 @@ infrastructure/
 | Staging | `healthcare-mcp-staging.azure-api.net` |
 | Production | `healthcare-mcp.azure-api.net` |
 
-## Integration with Claude Code / GitHub Copilot
+## Integration with MCP Clients
 
-### MCP Plugin Configuration
+### Consolidated MCP Configuration
 
-The `.claude-plugin/marketplace.json` will reference Azure APIM endpoints:
+MCP-compatible clients can use the consolidated OAuth endpoints. Exact token
+configuration is client-specific:
 
 ```json
 {
   "name": "healthcare",
   "version": "1.0.0",
   "mcpServers": {
-    "cms-coverage": {
-      "url": "https://healthcare-mcp.azure-api.net/cms-coverage/mcp",
-      "transport": "sse",
+    "healthcare-reference-data": {
+      "url": "https://<gateway>/mcp/reference-data/mcp",
+      "transport": "streamable-http",
       "headers": {
         "Authorization": "Bearer ${AZURE_MCP_TOKEN}"
       }
@@ -325,6 +374,10 @@ For GitHub Copilot integration, tokens are acquired via:
 3. **Direct CLI**: Uses `az account get-access-token --resource api://healthcare-mcp-gateway`
 
 ## Monitoring and Observability
+
+> **Target state:** The metrics and queries below define the intended
+> control-plane view. The repository does not currently provide a complete
+> production dashboard or alert set.
 
 ### Key Metrics
 
@@ -348,32 +401,27 @@ ApiManagementGatewayLogs
 | order by TimeGenerated desc
 ```
 
-## Migration Path from Anthropic MCP Servers
+## Runtime Access Paths
 
-### Phase 1: Parallel Operation
-1. Deploy Azure APIM with MCP backends
-2. Test with new endpoints while original servers remain active
-3. Validate feature parity
-
-### Phase 2: Gradual Migration
-1. Update skill files to use Azure endpoints
-2. Add fallback logic for resilience
-3. Monitor for issues
-
-### Phase 3: Full Cutover
-1. Remove references to external MCP servers
-2. Update all documentation
-3. Deprecate old configurations
+| Path | Intended Use | Maturity |
+|---|---|---|
+| OAuth MCP endpoints | Shared and production-oriented clients | **Partially implemented** |
+| APIM passthrough endpoints | Development and compatibility testing | **Implemented** |
+| Direct Function endpoints | Local or isolated development only; bypasses APIM controls | **Implemented** |
 
 ## Security Best Practices
 
-1. **Least Privilege**: Subscription keys scoped to specific APIs
-2. **Rotation**: Automatic key rotation via Key Vault
-3. **Network Isolation**: Private endpoints for backend services
-4. **WAF Integration**: Azure Front Door or Application Gateway for additional protection
-5. **DDoS Protection**: Azure DDoS Protection Standard enabled
+1. **Implemented:** Entra ID token validation and managed-identity patterns.
+2. **Partially implemented:** Private endpoint infrastructure and
+   least-privilege role assignments.
+3. **Target state:** Uniform key rotation through Key Vault.
+4. **Target state:** WAF and additional ingress protection.
+5. **Target state:** Production DDoS, alerting, and incident-response controls.
 
 ## Cost Optimization
+
+> **Target state:** These are operating recommendations, not controls proven by
+> the current repository evidence.
 
 1. **Tier Selection**: Start with Developer tier, scale to Standard/Premium
 2. **Caching**: Enable response caching for read-heavy operations (ICD-10 lookups)
@@ -382,63 +430,33 @@ ApiManagementGatewayLogs
 
 ---
 
-## Progress
+## Current-State Summary
 
-1. [x] Create Bicep templates for APIM deployment
-2. [x] Implement MCP server backends (Azure Functions)
-3. [x] Configure OAuth 2.0 with Microsoft Entra ID
-4. [ ] Set up monitoring dashboards
-5. [x] Document authentication flow for consumers
+| Capability | Maturity |
+|---|---|
+| APIM Bicep and MCP backend registration | **Implemented** |
+| Entra ID OAuth and PRM policy assets | **Implemented** |
+| APIM and Function diagnostics | **Implemented** |
+| Uniform OAuth path for agent runtimes | **Partially implemented** |
+| FHIR private connectivity | **Partially implemented** |
+| Rate limits, WAF, and IP filtering | **Target state** |
+| Production dashboards, alerts, and SLOs | **Target state** |
+| Broader version, evaluation, promotion, rollback, and kill controls | **Target state** |
 
 ---
 
-## APIM MCP Server Configuration (Post-Deployment)
+## Current Consolidated Endpoint Verification
 
-After deploying the infrastructure with `azd provision` and `azd deploy`, you need to configure the MCP servers in APIM.
+The infrastructure assets register three consolidated capability services:
 
-### Option 1: Automated Setup Script (Recommended)
+| Service | Function App |
+|---|---|
+| `reference-data` | `mcp-reference-data` |
+| `clinical-research` | `mcp-clinical-research` |
+| `cosmos-rag` | `cosmos-rag` |
 
-The repository includes automated scripts that run after `azd deploy`:
-
-```bash
-# Scripts are run automatically via azd postdeploy hook
-# Or run manually:
-cd scripts
-pip install -r requirements.txt
-python setup_mcp_servers.py
-
-# Or use the bash script:
-./setup-mcp-servers.sh
-```
-
-The scripts will:
-1. Create APIM backends for each Function App
-2. Create MCP-compatible APIs with proper operations
-3. Apply MCP policies (CORS, headers, error handling)
-4. Add APIs to the healthcare-mcp product
-5. Generate VS Code `.vscode/mcp.json` configuration
-
-### Option 2: Azure Portal (Manual)
-
-For each MCP server (npi-lookup, icd10-validation, cms-coverage, fhir-operations, pubmed, clinical-trials):
-
-1. **Navigate to APIM** in the Azure Portal
-2. Go to **APIs** > **MCP Servers** > **+ Create MCP server**
-3. Select **Expose an existing MCP server**
-4. Configure the backend:
-
-   | Server | Backend MCP Server URL |
-   |--------|------------------------|
-   | NPI Lookup | `https://{base}-npi-lookup-func.azurewebsites.net/api/mcp` |
-   | ICD-10 Validation | `https://{base}-icd10-validation-func.azurewebsites.net/api/mcp` |
-   | CMS Coverage | `https://{base}-cms-coverage-func.azurewebsites.net/api/mcp` |
-   | FHIR Operations | `https://{base}-fhir-operations-func.azurewebsites.net/api/mcp` |
-   | PubMed | `https://{base}-pubmed-func.azurewebsites.net/api/mcp` |
-   | Clinical Trials | `https://{base}-clinical-trials-func.azurewebsites.net/api/mcp` |
-
-5. Set **Transport type** to **Streamable HTTP**
-6. Configure the MCP server name and base path (e.g., `npi-lookup-mcp`, path: `mcp/npi`)
-7. Click **Create**
+Use the OAuth path for shared production-oriented clients and the passthrough
+path for development and compatibility checks.
 
 ### Prerequisites
 
@@ -453,44 +471,23 @@ After registration, add to `.vscode/mcp.json`:
 ```json
 {
   "servers": {
-    "healthcare-npi": {
+    "healthcare-reference-data": {
       "type": "http",
-      "url": "https://{apim-name}.azure-api.net/npi-lookup-mcp/mcp",
+      "url": "https://{apim-name}.azure-api.net/mcp-pt/reference-data/mcp",
       "headers": {
         "Ocp-Apim-Subscription-Key": "${input:apimSubscriptionKey}"
       }
     },
-    "healthcare-icd10": {
+    "healthcare-clinical-research": {
       "type": "http",
-      "url": "https://{apim-name}.azure-api.net/icd10-validation-mcp/mcp",
+      "url": "https://{apim-name}.azure-api.net/mcp-pt/clinical-research/mcp",
       "headers": {
         "Ocp-Apim-Subscription-Key": "${input:apimSubscriptionKey}"
       }
     },
-    "healthcare-cms": {
+    "healthcare-rag": {
       "type": "http",
-      "url": "https://{apim-name}.azure-api.net/cms-coverage-mcp/mcp",
-      "headers": {
-        "Ocp-Apim-Subscription-Key": "${input:apimSubscriptionKey}"
-      }
-    },
-    "healthcare-fhir": {
-      "type": "http",
-      "url": "https://{apim-name}.azure-api.net/fhir-operations-mcp/mcp",
-      "headers": {
-        "Ocp-Apim-Subscription-Key": "${input:apimSubscriptionKey}"
-      }
-    },
-    "healthcare-pubmed": {
-      "type": "http",
-      "url": "https://{apim-name}.azure-api.net/pubmed-mcp/mcp",
-      "headers": {
-        "Ocp-Apim-Subscription-Key": "${input:apimSubscriptionKey}"
-      }
-    },
-    "healthcare-clinical-trials": {
-      "type": "http",
-      "url": "https://{apim-name}.azure-api.net/clinical-trials-mcp/mcp",
+      "url": "https://{apim-name}.azure-api.net/mcp-pt/cosmos-rag/mcp",
       "headers": {
         "Ocp-Apim-Subscription-Key": "${input:apimSubscriptionKey}"
       }
@@ -514,9 +511,9 @@ For development without APIM, you can connect directly to the Function Apps:
 ```json
 {
   "servers": {
-    "healthcare-npi-direct": {
+    "healthcare-reference-data-direct": {
       "type": "http",
-      "url": "https://{base}-npi-lookup-func.azurewebsites.net/api/mcp"
+      "url": "https://{base}-mcp-reference-data-func.azurewebsites.net/mcp"
     }
   }
 }
@@ -530,13 +527,13 @@ Test with curl:
 
 ```bash
 # List available tools
-curl -X POST "https://{apim-name}.azure-api.net/npi-lookup-mcp/mcp" \
+curl -X POST "https://{apim-name}.azure-api.net/mcp-pt/reference-data/mcp" \
   -H "Content-Type: application/json" \
   -H "Ocp-Apim-Subscription-Key: {key}" \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
 
 # Call a tool
-curl -X POST "https://{apim-name}.azure-api.net/npi-lookup-mcp/mcp" \
+curl -X POST "https://{apim-name}.azure-api.net/mcp-pt/reference-data/mcp" \
   -H "Content-Type: application/json" \
   -H "Ocp-Apim-Subscription-Key: {key}" \
   -d '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "lookup_npi", "arguments": {"npi": "1234567890"}}, "id": 2}'

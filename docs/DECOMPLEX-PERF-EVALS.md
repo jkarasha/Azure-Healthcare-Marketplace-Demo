@@ -1,134 +1,142 @@
-# De-Complexing + Performance Evals Plan
+# Production-Agent Evidence and Evaluation Model
 
-This repository has strong implementation depth but unnecessary cognitive load from tool-contract drift and duplicate runtime narratives.
+This document defines the evidence required to support production-agent claims
+and records the repository's current evaluation maturity.
 
-## 1) De-Complexing Strategy
+For the canonical responsibility narrative, see
+[`README.md`](../README.md).
 
-### A. Establish one canonical MCP contract
+## Current Evidence Coverage
 
-Canonical source of truth:
-- Server implementations in `src/mcp-servers/*/function_app.py`
+| Evidence Surface | Maturity | Current Coverage | Important Limitation |
+|---|---|---|---|
+| MCP contract runner | **Partially implemented** | Extracts 38 consolidated tool names and checks selected consumers | The current run finds zero README tool references and skips removed Foundry and beginner-guide files, so a passing result does not prove broad contract consistency |
+| MCP latency runner | **Partially implemented** | Measures success rate and p50/p95/max latency | Default cases focus on MCP protocol operations; no committed APIM production baseline is established |
+| Native Agent Framework runner | **Partially implemented** | Uses Agent Framework lab task and evaluation contracts | Current tasks primarily validate MCP protocol correctness, not workflow outcome quality |
+| Prior-auth fidelity runner | **Partially implemented** | Evaluates schema, bead ordering, and decision comparison | Current data contains one evaluated assessment; that assessment is schema-invalid, so `1/1` decision agreement is not meaningful production evidence |
+| CI evaluation gate | **Target state** | Workflow files exist | `.github/workflows/main_staging_ci.yml` has pytest commented out, while the deployment workflow sets `RUN_EVALS=false` |
 
-Guardrail:
-- Run `make eval-contracts` to validate high-traffic docs/config files against implemented tool names.
-- Files validated today:
-  - `README.md`
-  - `foundry-integration/agent_setup.py`
-  - `foundry-integration/agent_config.yaml`
-  - `foundry-integration/tools_catalog.json`
-  - `docs/MCP-SERVERS-BEGINNER-GUIDE.md`
+## Evidence Principle
 
-### B. Reduce surface-area ambiguity
+The production promotion unit is a versioned evidence bundle, not a prompt or
+model deployment. The bundle identifies the workflow, skill and rubric, model,
+tool contracts, infrastructure policy, evaluation data, results, known
+limitations, and approved exceptions.
 
-Recommended operating model:
-1. Primary runtime path: Python Azure Function MCP servers under `src/mcp-servers/`.
-2. Secondary/reference path: `azure-fhir-mcp-server/` (explicitly sample/reference only).
-3. Integration files (Foundry, docs, skills) should reference only canonical tool names.
+## Non-Negotiable Release Gates
 
-### C. Stage cleanup by risk
+- No unauthorized data or capability access.
+- Required evidence, provenance, and audit lineage are complete.
+- Outputs conform to active schema and policy versions.
+- Safety-critical and prohibited outcomes remain within defined thresholds.
+- Recovery does not duplicate or lose consequential side effects.
 
-1. High-risk drift first:
-- Foundry tool contracts
-- README tool list and quick-start path
+A release fails when any gate fails. Strong latency, cost, or aggregate
+accuracy cannot compensate for a failed gate.
 
-2. Medium-risk drift:
-- Skill references still using legacy names (`trials_search`, `cms_search_all`, etc.)
-- Deploy docs with stale tool examples
+## Balanced Scorecard
 
-3. Low-risk cleanup:
-- Naming consistency and duplication cleanup across architecture docs
+| Category | Required Measures |
+|---|---|
+| Outcome value | Completion rate, turnaround time, user effort, downstream resolution |
+| Decision quality | Precision and recall by outcome class, abstention quality, calibration, high-risk cohort performance |
+| Operational reliability | Completion rate, p95/p99 latency, checkpoint recovery, dependency tolerance, degraded-mode frequency |
+| Human effectiveness | Review time, override rate and reason, disagreement resolution, reviewer confidence |
+| Economics | Cost per correct completed workflow, model/tool cost distribution, human-escalation cost |
 
-## 2) Performance + Reliability Evals
+Results must be segmented by workflow version, policy version, model, tool
+versions, risk tier, and case cohort. Do not present a single aggregate
+accuracy result as production readiness.
 
-### Native Agent Framework eval surfaces (first choice)
+## Evidence Roadmap
 
-From the installed framework packages in `src/agents/.venv`:
-- `agent_framework.observability` (OpenTelemetry traces + metrics + instrumentation)
-- `agent_framework_lab_gaia` evaluation contracts (`Task`, `Prediction`, `Evaluation`, `TaskResult`, `Evaluator`, `TaskRunner`)
-- `agent_framework_lab_gaia.GAIA` benchmark runner (dataset-backed benchmark)
+### 1. Repair Current Contract Coverage
 
-Repository integration:
-- `make eval-native-local`
-- Script: `scripts/eval_native_agent_framework.py`
-- Config: `scripts/evals/native-agent-framework.local.json`
+- Make the contract runner fail when an expected consumer yields zero
+  references.
+- Replace removed consumer paths with current Foundry, skill, and documentation
+  surfaces.
+- Validate role-specific `allowed_tools` sets as well as global tool names.
 
-This uses native evaluation data contracts for local MCP checks and keeps result
-format aligned with Agent Framework lab patterns.
+### 2. Expand Workflow Outcome Cases
 
-### Baseline evals (implemented)
+- Add approved, pending, rejected, ambiguous, missing-evidence, invalid-input,
+  and dependency-failure cohorts.
+- Require schema validity before counting decision agreement.
+- Report confidence calibration and abstention behavior.
 
-1. Contract eval
-- Command: `make eval-contracts`
-- Outcome: fail fast when docs/configs reference non-existent tools.
+### 3. Add Reliability and Recovery Evidence
 
-2. Latency + reliability eval
-- Command: `make eval-latency-local`
-- Config: `scripts/evals/mcp-latency.local.json`
-- Current focus: MCP protocol overhead (`tools/list`) across all six servers.
-- Metrics: success rate, p50, p95, max latency.
+- Exercise bounded retry, timeout, cancellation, checkpoint resume,
+  incompatible-version recovery, and uncertain side-effect reconciliation.
+- Publish local and APIM-hosted latency distributions separately.
 
-3. Native-style task eval (Agent Framework contracts)
-- Command: `make eval-native-local`
-- Outcome: pass/fail and score per task using `Task/Prediction/Evaluation/TaskResult`.
-- Current focus: MCP protocol correctness checks (`tools/list`) for all six servers.
+### 4. Add Human-Authority Evidence
 
-### Suggested KPI gates
+- Measure review latency, override rate and reason, disagreement resolution,
+  and audit completeness.
 
-For local/dev MCP baseline:
-- Success rate: `>= 99%`
-- p95 latency (`tools/list`): `<= 2000ms`
+### 5. Enforce Promotion Gates
 
-For APIM-hosted baseline (next step):
-- Success rate: `>= 99%`
-- p95 latency (`tools/list`): `<= 2500ms`
+- Run deterministic contract checks on pull requests.
+- Run representative workflow and resilience suites before promotion.
+- Store the evidence bundle with the promoted version.
 
-### Next eval expansions
+## Current Local Checks
 
-1. Add tool-call workload profiles per server:
-- NPI: `validate_npi`
-- ICD-10: `validate_icd10`
-- CMS: `get_coverage_by_cpt`
-- FHIR: `get_patient_observations`
-- PubMed: `search_pubmed`
-- Trials: `search_trials`
+These commands exercise existing runners. They do not, by themselves,
+constitute the complete production evidence model above.
 
-2. Add APIM config for latency evals:
-- Use env-var headers (subscription key / token)
-- Compare local vs APIM distributions
+### Contract Surface
 
-3. Add CI gate (optional):
-- Run `eval-contracts` on every PR
-- Run latency eval in nightly or environment smoke suite
-
-## 3) Practical Workflow
-
-1. Start local servers:
-```bash
-make local-start
-```
-
-2. Run contract gate:
 ```bash
 make eval-contracts
 ```
 
-3. Run local latency baseline:
+### Local MCP Latency
+
 ```bash
 make eval-latency-local
 ```
 
-4. Run native Agent Framework-style evals:
+### Native Agent Framework Contracts
+
 ```bash
 make eval-native-local
 ```
 
-4. Stop local servers:
+### Prior-Authorization Fidelity
+
 ```bash
-make local-stop
+python3 scripts/eval_prior_auth.py --json
 ```
 
-## 4) Why this de-complexes the project
+At the time this narrative was written, the prior-auth runner evaluated one
+assessment with a fidelity score of 72, a schema-invalid result, and `1/1`
+decision agreement. Treat this as a smoke signal, not an accuracy claim.
 
-- Replaces manual contract checking with deterministic evals.
-- Keeps docs and integration artifacts synchronized to real tool APIs.
-- Moves performance discussion from intuition to measurable latency/reliability baselines.
+## Practical Local Sequence
+
+1. Start local capability services:
+
+   ```bash
+   make local-start
+   ```
+
+2. Run available checks:
+
+   ```bash
+   make eval-contracts
+   make eval-latency-local
+   make eval-native-local
+   python3 scripts/eval_prior_auth.py --json
+   ```
+
+3. Stop local services:
+
+   ```bash
+   make local-stop
+   ```
+
+Passing these checks means the covered local cases passed. It does not mean the
+system has satisfied the release gates or balanced scorecard.
