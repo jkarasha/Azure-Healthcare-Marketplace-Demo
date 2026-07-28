@@ -911,7 +911,8 @@ class TestValidateAssessment:
         ]
 
     def test_valid_decisions_contract(self):
-        assert VALID_DECISIONS == {"APPROVE", "PEND", "DENY"}
+        # ruff SIM300 reads `CONST == {literal}` as a Yoda condition.
+        assert {"APPROVE", "PEND", "DENY"} == VALID_DECISIONS
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1024,14 +1025,14 @@ Expected: `13 passed`.
 
 - [ ] **Step 5: Make the eval harness consume the shared contract**
 
-In `tests/eval/prior_auth_eval.py`, delete the local constant definitions in the "Assessment schema contract" section (lines 78–92: `REQUIRED_TOP_LEVEL_KEYS` through `REQUIRED_CLINICAL_KEYS`) and replace that whole block with:
+In `tests/eval/prior_auth_eval.py`, delete the local constant definitions in the "Assessment schema contract" section (around lines 70–89 — locate them by content, not line number: `REQUIRED_TOP_LEVEL_KEYS` through `REQUIRED_CLINICAL_KEYS`, plus `VALID_DECISIONS`) and replace that whole block with:
 
 ```python
 # ============================================================================
 # Assessment schema contract — owned by the workflow, consumed here
 # ============================================================================
 
-from agents.workflows.assessment_schema import (  # noqa: E402
+from agents.workflows.assessment_schema import (  # noqa: E402,I001
     REQUIRED_CLINICAL_KEYS,
     REQUIRED_POLICY_KEYS,
     REQUIRED_RECOMMENDATION_KEYS,
