@@ -164,7 +164,7 @@ Run:
 ```bash
 cd "$REPO" && uv run pytest tests/eval -q
 ```
-Expected: all tests in `tests/eval/test_prior_auth_eval.py` PASS, 0 errors. If any fail, fix the *test* only if it is a genuine environment issue (e.g. a missing `__init__.py`); do not change eval scoring logic in this task.
+Expected: **13 passed, 1 failed** out of 14. The one failure is `TestPriorAuthSchemaContract::test_top_level_keys` — `AssertionError: Missing top-level keys: {'status', 'workflow_id', 'request_id'}`. That is a real, pre-existing data defect in `data/cases/001/a/waypoints/assessment.json`, **not** an environment problem, and **Task 5 fixes it**. Leave it failing for now. Do not change eval scoring logic to make it pass.
 
 - [ ] **Step 7: Verify integration tests are collected but not run**
 
@@ -172,7 +172,7 @@ Run:
 ```bash
 cd "$REPO" && uv run pytest -q -m "not integration" 2>&1 | tail -5
 ```
-Expected: PASS with the integration tests deselected. This is the command CI will use.
+Expected: `83 collected / 69 deselected / 14 selected`, with the same single pre-existing failure as Step 6 (13 passed, 1 failed). This is the command CI will use — CI will go green once Task 5 lands.
 
 - [ ] **Step 8: Commit**
 
@@ -1518,10 +1518,106 @@ Copilot-Session: 1abce17c-0b68-47a7-9a9d-bcebbc0170e1"
 ### Task 8: Make the proof repeatable — Make targets and CI
 
 **Files:**
+- Modify: `src/agents/framework_devui.py`, `src/agents/workflows/literature_search.py`, `src/agents/workflows/prior_auth.py`, `tests/eval/test_prior_auth_eval.py`, `tests/integration/test_backwards_compat.py` (pre-existing lint debt)
 - Modify: `Makefile`
 - Modify: `.github/workflows/main_staging_ci.yml`
 
-- [ ] **Step 1: Add the Make targets**
+> **Why the lint steps come first:** the CI job added later in this task runs
+> `uv run ruff check src/agents tests scripts`, which **exits non-zero today** on 14
+> pre-existing errors that predate this plan. The lint gate cannot be added until they
+> are cleared. All 14 are trivial; 13 are auto-fixable.
+
+- [ ] **Step 1: Confirm the pre-existing lint debt**
+
+Run:
+```bash
+cd "$REPO" && uv run ruff check src/agents tests scripts --output-format=concise
+```
+Expected: exactly these 14 errors —
+
+```
+src/agents/framework_devui.py:78:9: F401 [*] `.tools.ICD10_TOOLS_COMPLIANCE` imported but unused
+src/agents/framework_devui.py:80:9: F401 [*] `.tools.NPI_TOOLS_COMPLIANCE` imported but unused
+src/agents/framework_devui.py:180:51: RUF005 Consider iterable unpacking instead of concatenation
+src/agents/workflows/literature_search.py:12:1: I001 [*] Import block is un-sorted or un-formatted
+src/agents/workflows/prior_auth.py:33:8: F401 [*] `os` imported but unused
+tests/eval/test_prior_auth_eval.py:11:1: I001 [*] Import block is un-sorted or un-formatted
+tests/integration/test_backwards_compat.py:14:49: F401 [*] `tests.conftest.CANONICAL_TOOLS` imported but unused
+tests/integration/test_backwards_compat.py:98:16: SIM300 [*] Yoda condition detected
+   ... and 6 more SIM300 at lines 103, 108, 113, 118, 123, 130
+Found 14 errors.
+```
+
+If the count differs, an earlier task introduced or removed lint errors — investigate before continuing rather than blindly auto-fixing.
+
+- [ ] **Step 2: Auto-fix the 13 mechanical errors**
+
+Run:
+```bash
+cd "$REPO" && uv run ruff check src/agents tests scripts --fix --output-format=concise
+```
+Expected: 13 fixed, 1 remaining (`RUF005` in `framework_devui.py`).
+
+- [ ] **Step 3: Fix the remaining RUF005 by hand**
+
+`ruff` classes this as an unsafe fix because it can change behaviour if the left operand
+is not a list. Here it demonstrably is a list, so apply it manually rather than with
+`--unsafe-fixes`. In `src/agents/framework_devui.py` around line 180, replace:
+
+```python
+            ref_data("Reference Data (Coverage)", ICD10_TOOLS_SEARCH + ["search_coverage", "get_coverage_by_cpt", "get_coverage_by_icd10", "check_medical_necessity", "get_mac_jurisdiction"]),
+```
+
+with:
+
+```python
+            ref_data(
+                "Reference Data (Coverage)",
+                [
+                    *ICD10_TOOLS_SEARCH,
+                    "search_coverage",
+                    "get_coverage_by_cpt",
+                    "get_coverage_by_icd10",
+                    "check_medical_necessity",
+                    "get_mac_jurisdiction",
+                ],
+            ),
+```
+
+- [ ] **Step 4: Verify lint is clean**
+
+Run:
+```bash
+cd "$REPO" && uv run ruff check src/agents tests scripts
+```
+Expected: `All checks passed!`
+
+- [ ] **Step 5: Verify the auto-fixes broke nothing**
+
+Run:
+```bash
+cd "$REPO" && uv run pytest tests/unit tests/eval -q 2>&1 | tail -3
+```
+Expected: all PASS, same counts as at the end of Task 7. The `I001` import re-sorting and `F401` removals are behaviour-preserving, but confirm rather than assume.
+
+- [ ] **Step 6: Commit the lint cleanup separately**
+
+Keeping this out of the CI commit makes the CI diff reviewable.
+
+```bash
+cd "$REPO"
+git add src/agents tests
+git commit -m "style: clear pre-existing ruff findings blocking the lint gate
+
+14 errors predating this plan (unused imports, unsorted import blocks,
+Yoda conditions, one list concatenation). All behaviour-preserving.
+Required before CI can enforce ruff.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+Copilot-Session: 1abce17c-0b68-47a7-9a9d-bcebbc0170e1"
+```
+
+- [ ] **Step 7: Add the Make targets**
 
 In `Makefile`, add `test-unit` and `eval-prior-auth` to the `.PHONY` list on line 5 (append them to the existing space-separated names before the trailing `\`).
 
@@ -1541,7 +1637,7 @@ Finally, update the `eval-all` target on line 137 to include the new gate:
 eval-all: eval-contracts test-unit eval-prior-auth eval-latency-local eval-native-local
 ```
 
-- [ ] **Step 2: Verify the targets run**
+- [ ] **Step 8: Verify the targets run**
 
 Run:
 ```bash
@@ -1549,7 +1645,7 @@ cd "$REPO" && make test-unit && make eval-prior-auth
 ```
 Expected: `make test-unit` reports all tests passing; `make eval-prior-auth` prints the fidelity report for case 001_a. (Do **not** run `make eval-all` — it starts local MCP servers, which is out of scope for this slice.)
 
-- [ ] **Step 3: Add a real CI job**
+- [ ] **Step 9: Add a real CI job**
 
 In `.github/workflows/main_staging_ci.yml`, add this job at the top level of the `jobs:` mapping, immediately before the existing `preview-deployment:` job (line 76). Match the surrounding indentation exactly — job keys sit at two spaces.
 
@@ -1589,7 +1685,7 @@ In `.github/workflows/main_staging_ci.yml`, add this job at the top level of the
 
 This job needs no Azure credentials, no MCP servers, and no LLM — which is the whole point of this slice.
 
-- [ ] **Step 4: Validate the workflow YAML**
+- [ ] **Step 10: Validate the workflow YAML**
 
 Run:
 ```bash
@@ -1607,7 +1703,7 @@ print('OK')
 ```
 Expected: `OK` with `python-unit-tests` in the job list. If PyYAML is unavailable, the message says so and GitHub will validate on push.
 
-- [ ] **Step 5: Run the full deterministic gate exactly as CI will**
+- [ ] **Step 11: Run the full deterministic gate exactly as CI will**
 
 Run:
 ```bash
@@ -1619,7 +1715,7 @@ cd "$REPO" && \
 ```
 Expected: every command exits 0. This is the acceptance gate for the whole plan.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 cd "$REPO"
@@ -1634,7 +1730,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 Copilot-Session: 1abce17c-0b68-47a7-9a9d-bcebbc0170e1"
 ```
 
-- [ ] **Step 7: Land the plane**
+- [ ] **Step 13: Land the plane**
 
 ```bash
 cd "$REPO"
