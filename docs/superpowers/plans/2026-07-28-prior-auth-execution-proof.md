@@ -290,7 +290,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?```", re.DOTALL)
 
@@ -301,6 +302,12 @@ def iter_json_objects(text: str) -> Iterator[dict[str, Any]]:
     Scans for balanced ``{...}`` spans while tracking string literals and
     backslash escapes, so braces inside JSON strings never affect nesting
     depth. Spans that are balanced but not valid JSON are skipped.
+
+    Known limitation: an unmatched ``"`` in surrounding prose opens a phantom
+    string and will hide any object after it. Single-pass scanning without
+    backtracking cannot avoid this. In practice agent output is either fenced
+    or bare JSON, and ``split_concurrent_outputs`` prefers fenced blocks, so
+    this path is rarely reached with unbalanced prose quotes.
     """
     if not isinstance(text, str):
         return
@@ -501,10 +508,51 @@ CLINICAL_ONLY = CLINICAL_JSON + "\n\nCoverageAgent: unable to reach the policy s
 
 - [ ] **Step 3: Write the failing test**
 
-Append to `tests/unit/test_parsing.py` (add `split_concurrent_outputs` to the existing import line so it reads
-`from agents.workflows.parsing import extract_json_from_text, split_concurrent_outputs`):
+Append to `tests/unit/test_parsing.py` (add `iter_json_objects` and `split_concurrent_outputs` to the existing import line so it reads
+`from agents.workflows.parsing import extract_json_from_text, iter_json_objects, split_concurrent_outputs`):
 
 ```python
+class TestIterJsonObjects:
+    """Direct coverage for the scanner that split_concurrent_outputs depends on.
+
+    Task 2 only exercised this indirectly via extract_json_from_text, which
+    stops at the first object. The multi-object behaviour below is the actual
+    contract split_concurrent_outputs relies on.
+    """
+
+    def test_yields_every_top_level_object_in_order(self):
+        assert list(iter_json_objects('{"a": 1}{"b": 2}{"c": 3}')) == [{"a": 1}, {"b": 2}, {"c": 3}]
+
+    def test_yields_objects_separated_by_prose(self):
+        text = 'Agent A said:\n{"a": 1}\n\nAgent B said:\n{"b": 2}'
+        assert list(iter_json_objects(text)) == [{"a": 1}, {"b": 2}]
+
+    def test_does_not_yield_nested_objects_separately(self):
+        assert list(iter_json_objects('{"outer": {"inner": 1}}')) == [{"outer": {"inner": 1}}]
+
+    def test_skips_balanced_but_invalid_json(self):
+        text = '{not valid json}{"valid": true}'
+        assert list(iter_json_objects(text)) == [{"valid": True}]
+
+    def test_ignores_braces_and_quotes_inside_strings(self):
+        text = '{"a": "brace } and \\" quote"}{"b": 2}'
+        assert list(iter_json_objects(text)) == [{"a": 'brace } and " quote'}, {"b": 2}]
+
+    def test_tolerates_stray_closing_brace_before_any_object(self):
+        assert list(iter_json_objects('}}{"a": 1}')) == [{"a": 1}]
+
+    def test_yields_nothing_for_unterminated_object(self):
+        assert list(iter_json_objects('{"a": 1')) == []
+
+    def test_yields_nothing_for_non_string_input(self):
+        assert list(iter_json_objects(None)) == []
+        assert list(iter_json_objects(42)) == []
+
+    def test_skips_top_level_arrays(self):
+        """Only dicts are yielded; a top-level array is not an agent payload."""
+        assert list(iter_json_objects('[1, 2, 3]{"a": 1}')) == [{"a": 1}]
+
+
 class TestSplitConcurrentOutputs:
     def test_splits_two_plain_concatenated_objects(self):
         from tests.unit.fixtures import concurrent_outputs as fx
@@ -640,7 +688,7 @@ Run:
 ```bash
 cd "$REPO" && uv run pytest tests/unit/test_parsing.py -q 2>&1 | tail -3
 ```
-Expected: `20 passed` (14 from Task 2, plus 6 new).
+Expected: `29 passed` (14 from Task 2, plus 9 new `TestIterJsonObjects` and 6 new `TestSplitConcurrentOutputs`).
 
 - [ ] **Step 7: Rewire `_extract_json_from_text` in the workflow**
 
@@ -713,7 +761,7 @@ Run:
 ```bash
 cd "$REPO" && uv run ruff check src/agents/workflows/ tests/unit/ && uv run pytest tests/unit -q 2>&1 | tail -3
 ```
-Expected: ruff reports `All checks passed!` and pytest reports `20 passed`.
+Expected: ruff reports `All checks passed!` and pytest reports `29 passed`.
 
 > Note: `uv run python -c "import agents.workflows.prior_auth"` will fail without the agent venv — that is expected and not a regression. Import-check the workflow with the venv instead:
 > ```bash
