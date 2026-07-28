@@ -161,3 +161,26 @@ class TestSplitConcurrentOutputs:
         )
         assert clinical is None
         assert coverage is None
+
+    def test_recovers_unfenced_agent_when_partner_used_a_fence(self):
+        """One agent fencing its output must not hide the other's."""
+        from tests.unit.fixtures import concurrent_outputs as fx
+
+        for text in (
+            fx.MIXED_FENCING_COVERAGE_FENCED,
+            fx.MIXED_FENCING_CLINICAL_FENCED,
+        ):
+            clinical, coverage = split_concurrent_outputs(
+                text,
+                first_marker="clinical_summary",
+                second_marker="applicable_policies",
+            )
+            assert clinical is not None and "clinical_summary" in clinical
+            assert coverage is not None and "applicable_policies" in coverage
+
+    def test_fenced_object_is_not_returned_twice(self):
+        """Fenced payloads are also visible to the raw scan; dedupe them."""
+        from agents.workflows.parsing import _iter_all_objects
+        from tests.unit.fixtures import concurrent_outputs as fx
+
+        assert len(_iter_all_objects(fx.CONCATENATED_FENCED)) == 2

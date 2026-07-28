@@ -93,14 +93,29 @@ def extract_json_from_text(text: str) -> dict[str, Any] | None:
 
 
 def _iter_all_objects(text: str) -> list[dict[str, Any]]:
-    """Collect every JSON object in ``text``, unwrapping fenced blocks first."""
+    """Collect every JSON object in ``text``.
+
+    Fenced blocks are scanned first because fencing isolates each payload
+    from surrounding prose, which can otherwise derail the raw scanner (an
+    unmatched quote in the prose opens a phantom string literal). The raw
+    text is then scanned as well, so that an agent which omitted its fence
+    is not silently dropped when its partner used one. Objects already
+    recovered from a fence are not added twice.
+    """
+    if not isinstance(text, str):
+        return []
+
     objects: list[dict[str, Any]] = []
-    fences = _FENCE_RE.findall(text) if isinstance(text, str) else []
-    for block in fences:
-        objects.extend(iter_json_objects(block))
-    if objects:
-        return objects
-    return list(iter_json_objects(text))
+    for block in _FENCE_RE.findall(text):
+        for obj in iter_json_objects(block):
+            if obj not in objects:
+                objects.append(obj)
+
+    for obj in iter_json_objects(text):
+        if obj not in objects:
+            objects.append(obj)
+
+    return objects
 
 
 def split_concurrent_outputs(

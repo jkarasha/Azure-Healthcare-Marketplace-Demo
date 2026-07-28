@@ -60,3 +60,23 @@ MERGED_SINGLE_OBJECT = """{
 
 # Degenerate case: the coverage agent failed and emitted prose only.
 CLINICAL_ONLY = CLINICAL_JSON + "\n\nCoverageAgent: unable to reach the policy service."
+
+# Mixed fencing: the coverage agent honoured the "respond in a ```json block"
+# instruction and the clinical agent did not. LLMs are not consistent about
+# this, and dropping the unfenced payload reproduces the very bug this module
+# exists to fix.
+MIXED_FENCING_COVERAGE_FENCED = (
+    "ClinicalReviewer:\n"
+    + CLINICAL_JSON
+    + "\n\nCoverageAgent:\n```json\n"
+    + COVERAGE_JSON
+    + "\n```\n"
+)
+
+# The same mismatch the other way round.
+MIXED_FENCING_CLINICAL_FENCED = (
+    "ClinicalReviewer:\n```json\n"
+    + CLINICAL_JSON
+    + "\n```\n\nCoverageAgent:\n"
+    + COVERAGE_JSON
+)
