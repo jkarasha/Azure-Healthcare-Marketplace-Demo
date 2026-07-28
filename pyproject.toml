@@ -49,6 +49,7 @@ indent-style = "space"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 norecursedirs = [".git", ".venv", "node_modules", ".python_packages", ".runs", "__pycache__"]
+pythonpath = ["src"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
