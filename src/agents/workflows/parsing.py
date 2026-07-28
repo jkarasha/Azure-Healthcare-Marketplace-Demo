@@ -90,3 +90,48 @@ def extract_json_from_text(text: str) -> dict[str, Any] | None:
         return obj
 
     return None
+
+
+def _iter_all_objects(text: str) -> list[dict[str, Any]]:
+    """Collect every JSON object in ``text``, unwrapping fenced blocks first."""
+    objects: list[dict[str, Any]] = []
+    fences = _FENCE_RE.findall(text) if isinstance(text, str) else []
+    for block in fences:
+        objects.extend(iter_json_objects(block))
+    if objects:
+        return objects
+    return list(iter_json_objects(text))
+
+
+def split_concurrent_outputs(
+    text: str,
+    first_marker: str,
+    second_marker: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Split one concatenated concurrent-agent result into two objects.
+
+    ``ConcurrentBuilder`` returns both participants' outputs as a single
+    string with no delimiter, and the agents may finish in either order.
+    Rather than guessing at offsets, this parses *every* JSON object in the
+    text and identifies each participant by a key unique to its schema.
+
+    Returns ``(first, second)``. Either may be ``None`` when that agent
+    produced no parseable output. When one object contains both markers
+    (an agent merged the payloads), the same object is returned for both.
+    """
+    objects = _iter_all_objects(text)
+
+    first: dict[str, Any] | None = None
+    second: dict[str, Any] | None = None
+
+    for obj in objects:
+        has_first = first_marker in obj
+        has_second = second_marker in obj
+        if has_first and has_second:
+            return obj, obj
+        if has_first and first is None:
+            first = obj
+        elif has_second and second is None:
+            second = obj
+
+    return first, second

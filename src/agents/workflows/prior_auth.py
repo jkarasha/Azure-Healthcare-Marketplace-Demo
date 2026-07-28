@@ -49,6 +49,7 @@ from ..agents import (
 )
 from ..config import AgentConfig
 from ..tools import MCPToolKit
+from .parsing import extract_json_from_text, split_concurrent_outputs
 
 logger = logging.getLogger(__name__)
 
@@ -206,34 +207,12 @@ def _write_output_file(path: Path, content: str) -> None:
 
 
 def _extract_json_from_text(text: str) -> dict | None:
-    """Try to extract a JSON object from agent text output."""
-    try:
-        return json.loads(text)
-    except (json.JSONDecodeError, TypeError):
-        pass
-    # Look for ```json ... ``` blocks
-    m = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(1))
-        except json.JSONDecodeError:
-            pass
-    # Look for the first { ... } block
-    brace_depth = 0
-    start = None
-    for i, ch in enumerate(text):
-        if ch == "{":
-            if brace_depth == 0:
-                start = i
-            brace_depth += 1
-        elif ch == "}":
-            brace_depth -= 1
-            if brace_depth == 0 and start is not None:
-                try:
-                    return json.loads(text[start : i + 1])
-                except json.JSONDecodeError:
-                    start = None
-    return None
+    """Try to extract a JSON object from agent text output.
+
+    Thin wrapper kept for call-site compatibility; the implementation lives
+    in ``parsing.py`` so it can be unit tested without the agent framework.
+    """
+    return extract_json_from_text(text)
 
 
 def _safe_get(d: dict | None, *keys: str, default: Any = None) -> Any:
@@ -687,8 +666,19 @@ async def run_prior_auth_workflow(
             concurrent_text = str(concurrent_results)
             logger.info("Bead 002: Concurrent phase produced %d chars", len(concurrent_text))
 
-            # --- Parse clinical reviewer output ---
-            clinical_parsed = _extract_json_from_text(concurrent_text)
+            # --- Parse both agents' outputs from the concatenated result ---
+            # ConcurrentBuilder returns one string containing both agents'
+            # JSON in nondeterministic order; identify each by a schema-unique
+            # key rather than by offset.
+            clinical_parsed, coverage_parsed = split_concurrent_outputs(
+                concurrent_text,
+                first_marker="clinical_summary",
+                second_marker="applicable_policies",
+            )
+            if clinical_parsed is None:
+                logger.warning("Bead 002: no parseable ClinicalReviewer output")
+            if coverage_parsed is None:
+                logger.warning("Bead 002: no parseable CoverageAgent output")
             if clinical_parsed:
                 cs = _safe_get(clinical_parsed, "clinical_summary", default={})
                 assessment["clinical"]["chief_complaint"] = cs.get(
@@ -726,16 +716,6 @@ async def run_prior_auth_workflow(
                 if fhir_ctx:
                     assessment["fhir_patient_context"]["patient_found"] = True
                     assessment["fhir_patient_context"]["active_conditions"] = fhir_ctx.get("conditions", [])
-
-            # --- Parse coverage agent output ---
-            coverage_parsed = None
-            if clinical_parsed and "coverage_status" in clinical_parsed:
-                coverage_parsed = clinical_parsed
-            else:
-                first_close = concurrent_text.find("}")
-                if first_close > 0:
-                    remainder = concurrent_text[first_close + 1 :]
-                    coverage_parsed = _extract_json_from_text(remainder)
 
             if coverage_parsed and "applicable_policies" in coverage_parsed:
                 policies = coverage_parsed.get("applicable_policies", [])
