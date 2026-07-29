@@ -8,7 +8,8 @@
     "dob": "2014-10-19",
     "age": "11 years",
     "sex": "Female",
-    "plan": "PLAN-COMMERCIAL-001"
+    "plan": "PLAN-COMMERCIAL-001",
+    "state": "WA"
   },
   "provider": {
     "name": "Dr. Alex Sample",
@@ -35,7 +36,7 @@
     "icd10_codes": ["K50.80"],
     "primary_diagnosis": "Crohn's disease of both small and large intestine, without complications"
   },
-  "clinical_summary": "11-year-old with biopsy-supported Crohn's disease. Currently on methylprednisolone 40 mg daily with inadequate response: ongoing hematochezia, abdominal cramping, and worsening microcytic anemia (Hgb 9.0) requiring transfusion. Colonoscopy shows ileal ulceration with segmental strictures and colonic cobblestoning with skip areas.",
+  "clinical_summary": "11-year-old with endoscopically-confirmed Crohn's disease (biopsies pending). Currently on methylprednisolone 40 mg daily with inadequate response: ongoing hematochezia, abdominal cramping, and worsening microcytic anemia (Hgb 9.0) requiring transfusion. Colonoscopy shows ileal ulceration with segmental strictures and colonic cobblestoning with skip areas.",
   "prior_treatments": [
     {
       "treatment": "Methylprednisolone 40 mg daily",
