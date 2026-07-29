@@ -31,7 +31,7 @@ This subskill uses **2 consolidated MCP servers** for healthcare data validation
 4. Extracts clinical data and maps to policy criteria
 5. Searches PubMed for supporting literature (optional, strengthens evidence)
 6. Performs medical necessity assessment
-7. Generates recommendation (APPROVE/PEND)
+7. Generates recommendation (APPROVE/PEND/DENY)
 
 ---
 
@@ -325,7 +325,7 @@ Apply rubric.md decision rules:
 - Confidence <60% → Request clarification
 - Borderline case → Request medical director review
 
-**Note:** AI never recommends DENY in default mode.
+**Note:** DENY is permitted when a mandatory criterion is `NOT_MET` at ≥90% confidence and the record affirmatively shows the violation (not merely missing documentation). `INSUFFICIENT` evidence yields PEND, not DENY. A DENY recommendation is confirmed, overridden, or downgraded to PEND by the human reviewer in Subskill 2.
 
 ---
 

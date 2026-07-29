@@ -11,6 +11,24 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_PY = REPO_ROOT / "src" / "agents" / "agents.py"
 RUBRIC = REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "references" / "rubric.md"
+SKILL_REFS_DIR = REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "references"
+
+# Phrases that constitute a DENY prohibition — any one of these appearing in an
+# LLM-facing skill reference file contradicts rubric.md and must fail the suite.
+# Phrased to match actual drift that has occurred, case-insensitively.
+# IMPORTANT: these must NOT match legitimate prose such as
+#   "Final denial authority is always human" or "Denial decisions (human-only)"
+#   or role-scoping notes like "do not make approval/denial calls".
+_DENY_PROHIBITION_PHRASES = [
+    "never recommends deny",
+    "never recommend deny",
+    "ai never recommends deny",
+    "never denies",
+    "may only recommend",
+    "you may only recommend",
+    "never make denial recommendations",
+    "deny is not an option",
+]
 
 
 def _agents_text() -> str:
@@ -71,3 +89,29 @@ class TestAgentInstructionsAlignWithRubric:
         assert "APPROVE, PEND, or DENY" in text, (
             "agents.py output-format block must list DENY as a valid recommendation value"
         )
+
+
+class TestSkillReferenceFilesAlignWithRubric:
+    """No LLM-facing skill reference file under prior-auth-azure/references/ may contain
+    a DENY-prohibition phrase that contradicts rubric.md."""
+
+    def test_no_deny_prohibition_in_skill_references(self):
+        """Scan all *.md files in the prior-auth skill references directory.
+
+        Fails immediately with the offending file path and phrase on the first hit,
+        so a future regression is instantly actionable.
+        """
+        md_files = sorted(SKILL_REFS_DIR.glob("*.md"))
+        assert md_files, f"No .md files found under {SKILL_REFS_DIR} — check SKILL_REFS_DIR path"
+
+        for md_file in md_files:
+            text_lower = md_file.read_text(encoding="utf-8", errors="replace").lower()
+            for phrase in _DENY_PROHIBITION_PHRASES:
+                if phrase in text_lower:
+                    raise AssertionError(
+                        f"DENY-prohibition phrase found in skill reference file.\n"
+                        f"  File   : {md_file.relative_to(REPO_ROOT)}\n"
+                        f"  Phrase : '{phrase}'\n"
+                        f"This contradicts rubric.md — update the file to reflect the "
+                        f"correct policy (DENY is permitted for NOT_MET at >=90% confidence)."
+                    )
