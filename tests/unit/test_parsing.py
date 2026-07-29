@@ -184,3 +184,53 @@ class TestSplitConcurrentOutputs:
         from tests.unit.fixtures import concurrent_outputs as fx
 
         assert len(_iter_all_objects(fx.CONCATENATED_FENCED)) == 2
+
+
+class TestExtractRecommendationFromText:
+    """Tests for extract_recommendation_from_text — the last-resort fallback."""
+
+    def setup_method(self):
+        from agents.workflows.parsing import extract_recommendation_from_text
+        self.fn = extract_recommendation_from_text
+
+    def test_json_label_deny(self):
+        assert self.fn('{"recommendation": "DENY", "summary": "..."}') == "DENY"
+
+    def test_json_label_approve(self):
+        assert self.fn('"recommendation": "APPROVE"') == "APPROVE"
+
+    def test_json_label_pend(self):
+        assert self.fn('"recommendation": "PEND"') == "PEND"
+
+    def test_json_label_case_insensitive(self):
+        assert self.fn('"recommendation": "deny"') == "DENY"
+
+    def test_standalone_deny_word(self):
+        assert self.fn("Based on the evidence, I recommend DENY.") == "DENY"
+
+    def test_standalone_approve_word(self):
+        assert self.fn("The criteria are met; APPROVE the request.") == "APPROVE"
+
+    def test_deny_beats_approve_when_both_present(self):
+        # If both appear (ambiguous prose), DENY wins — safer for human review.
+        assert self.fn("Could APPROVE but must DENY given the violation.") == "DENY"
+
+    def test_approved_does_not_match_approve(self):
+        # Word boundary: "approved" must NOT map to APPROVE.
+        assert self.fn("The prior request was approved last year.") == "PEND"
+
+    def test_denied_does_not_match_deny(self):
+        # Word boundary: "denied" must NOT map to DENY.
+        assert self.fn("The appeal was denied.") == "PEND"
+
+    def test_default_pend(self):
+        assert self.fn("No recommendation mentioned here.") == "PEND"
+
+    def test_non_string_returns_pend(self):
+        assert self.fn(None) == "PEND"  # type: ignore[arg-type]
+        assert self.fn(42) == "PEND"  # type: ignore[arg-type]
+
+    def test_json_label_takes_priority_over_prose(self):
+        # Explicit JSON field (key in quotes) wins over standalone word in surrounding prose.
+        text = '"recommendation": "PEND" but the word DENY appears later'
+        assert self.fn(text) == "PEND"

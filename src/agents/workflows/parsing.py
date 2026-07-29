@@ -150,3 +150,44 @@ def split_concurrent_outputs(
             second = obj
 
     return first, second
+
+
+# ---------------------------------------------------------------------------
+# Recommendation extraction — last-resort fallback for prose agent output
+# ---------------------------------------------------------------------------
+
+_RECOMMENDATION_LABEL_RE = re.compile(
+    r'"recommendation"\s*:\s*"(APPROVE|PEND|DENY)"',
+    re.IGNORECASE,
+)
+_DENY_WORD_RE = re.compile(r"\bdeny\b", re.IGNORECASE)
+_APPROVE_WORD_RE = re.compile(r"\bapprove\b", re.IGNORECASE)
+
+
+def extract_recommendation_from_text(text: str) -> str:
+    """Infer a recommendation value (APPROVE | PEND | DENY) from free-form text.
+
+    Used only when JSON extraction has already failed so the synthesis-agent
+    response is being treated as plain prose. Strategy:
+
+    1. Look for an explicit JSON-style ``"recommendation": "VALUE"`` field —
+       the most reliable signal in a partially-malformed response.
+    2. Scan for standalone DENY / APPROVE keywords (word-boundary anchored so
+       ``"approved"`` does not match APPROVE). DENY takes priority over APPROVE
+       in ambiguous text: a false DENY degrades gracefully to human override
+       whereas a false APPROVE could bypass necessary review.
+    3. Default to PEND — the safest outcome; prompts human information-gathering
+       rather than granting or blocking coverage.
+    """
+    if not isinstance(text, str):
+        return "PEND"
+
+    m = _RECOMMENDATION_LABEL_RE.search(text)
+    if m:
+        return m.group(1).upper()
+
+    if _DENY_WORD_RE.search(text):
+        return "DENY"
+    if _APPROVE_WORD_RE.search(text):
+        return "APPROVE"
+    return "PEND"

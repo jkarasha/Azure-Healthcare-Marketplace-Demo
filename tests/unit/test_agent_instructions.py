@@ -13,30 +13,49 @@ AGENTS_PY = REPO_ROOT / "src" / "agents" / "agents.py"
 RUBRIC = REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "references" / "rubric.md"
 SKILL_REFS_DIR = REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "references"
 
+# Every file that is sent (verbatim or by reference) to an LLM during a
+# prior-auth workflow.  Coverage is by construction: if a surface is added
+# here it is automatically guarded; if a new surface is created it must be
+# added here.
+_LLM_FACING_SURFACES: list[Path] = [
+    AGENTS_PY,
+    REPO_ROOT / "src" / "agents" / "workflows" / "prior_auth.py",
+    REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "SKILL.md",
+    *sorted(SKILL_REFS_DIR.glob("*.md")),
+]
+
 # Phrases that constitute a DENY prohibition — any one of these appearing in an
-# LLM-facing skill reference file contradicts rubric.md and must fail the suite.
-# Phrased to match actual drift that has occurred, case-insensitively.
+# LLM-facing surface contradicts rubric.md and must fail the suite.
+# Matched case-insensitively.
 # IMPORTANT: these must NOT match legitimate prose such as
-#   "Final denial authority is always human" or "Denial decisions (human-only)"
-#   or role-scoping notes like "do not make approval/denial calls".
+#   "Final denial authority is always human", "Denial decisions (human-only)",
+#   or role-scoping notes like "never make approval/denial recommendations"
+#   (the Synthesis Agent's role note for Clinical and Coverage agents).
+# M7 note: "may only recommend" is anchored to include "approve" to avoid
+#   false-positives on correct future prose like
+#   "may only recommend DENY when all three conditions hold".
 _DENY_PROHIBITION_PHRASES = [
     "never recommends deny",
     "never recommend deny",
     "ai never recommends deny",
     "never denies",
-    "may only recommend",
-    "you may only recommend",
+    "may only recommend approve",       # plain-text form
+    "may only recommend **approve**",   # markdown-bold form
     "never make denial recommendations",
     "deny is not an option",
 ]
 
 
+def _read_surface(path: Path) -> str:
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
 def _agents_text() -> str:
-    return AGENTS_PY.read_text()
+    return _read_surface(AGENTS_PY)
 
 
 def _rubric_text() -> str:
-    return RUBRIC.read_text()
+    return _read_surface(RUBRIC)
 
 
 class TestRubricContract:
@@ -61,14 +80,8 @@ class TestAgentInstructionsAlignWithRubric:
 
     def test_agent_instructions_do_not_forbid_deny(self):
         """None of the known stale DENY-prohibition phrases must appear in agents.py."""
-        text = _agents_text()
-        forbidden = [
-            "AI Never Recommends DENY",
-            "You may ONLY recommend **APPROVE** or **PEND**",
-            "never DENY",
-            "Never make denial recommendations",
-        ]
-        found = [phrase for phrase in forbidden if phrase in text]
+        text_lower = _agents_text().lower()
+        found = [phrase for phrase in _DENY_PROHIBITION_PHRASES if phrase in text_lower]
         assert not found, (
             f"agents.py contradicts the rubric — remove or replace these phrases: {found}"
         )
@@ -92,25 +105,25 @@ class TestAgentInstructionsAlignWithRubric:
 
 
 class TestSkillReferenceFilesAlignWithRubric:
-    """No LLM-facing skill reference file under prior-auth-azure/references/ may contain
-    a DENY-prohibition phrase that contradicts rubric.md."""
+    """No LLM-facing surface may contain a DENY-prohibition phrase that
+    contradicts rubric.md.  Coverage is by construction via _LLM_FACING_SURFACES:
+    every LLM-facing file in the prior-auth workflow must appear in that list."""
 
-    def test_no_deny_prohibition_in_skill_references(self):
-        """Scan all *.md files in the prior-auth skill references directory.
+    def test_no_deny_prohibition_in_any_llm_surface(self):
+        """Scan every LLM-facing surface for DENY-prohibition phrases.
 
-        Fails immediately with the offending file path and phrase on the first hit,
-        so a future regression is instantly actionable.
+        Fails immediately with the offending file path and phrase on the first
+        hit, so a future regression is instantly actionable.
         """
-        md_files = sorted(SKILL_REFS_DIR.glob("*.md"))
-        assert md_files, f"No .md files found under {SKILL_REFS_DIR} — check SKILL_REFS_DIR path"
+        assert _LLM_FACING_SURFACES, "_LLM_FACING_SURFACES is empty — check path constants"
 
-        for md_file in md_files:
-            text_lower = md_file.read_text(encoding="utf-8", errors="replace").lower()
+        for surface in _LLM_FACING_SURFACES:
+            text_lower = _read_surface(surface).lower()
             for phrase in _DENY_PROHIBITION_PHRASES:
                 if phrase in text_lower:
                     raise AssertionError(
-                        f"DENY-prohibition phrase found in skill reference file.\n"
-                        f"  File   : {md_file.relative_to(REPO_ROOT)}\n"
+                        f"DENY-prohibition phrase found in LLM-facing surface.\n"
+                        f"  File   : {surface.relative_to(REPO_ROOT)}\n"
                         f"  Phrase : '{phrase}'\n"
                         f"This contradicts rubric.md — update the file to reflect the "
                         f"correct policy (DENY is permitted for NOT_MET at >=90% confidence)."

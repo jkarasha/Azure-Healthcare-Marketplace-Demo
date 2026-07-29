@@ -317,6 +317,7 @@ Apply rubric.md decision rules:
 - All CPT codes valid
 - Coverage policy found
 - ≥80% of required criteria MET
+- No mandatory criterion is NOT_MET (any mandatory NOT_MET → PEND regardless of confidence)
 - Overall confidence ≥60%
 
 **PEND** (any of these):
@@ -399,7 +400,7 @@ Apply rubric.md decision rules:
   ],
 
   "recommendation": {
-    "decision": "APPROVE/PEND",
+    "decision": "APPROVE/PEND/DENY",
     "confidence": "HIGH/MEDIUM/LOW",
     "confidence_score": 0-100,
     "rationale": "...",
@@ -437,7 +438,7 @@ All decisions require human clinical review before finalization.
    - Member details (name, ID, DOB)
    - Service description
    - Provider details (name, NPI, specialty)
-   - Decision (APPROVE/PEND)
+   - Decision (APPROVE/PEND/DENY)
    - Overall confidence (percentage and level)
 
 2. **Clinical Synopsis**
@@ -480,7 +481,7 @@ All decisions require human clinical review before finalization.
    Criteria Met: [N]/[Total]
    Confidence: [Percentage]% ([Level])
 
-📝 RECOMMENDATION: [APPROVE/PEND]
+📝 RECOMMENDATION: [APPROVE/PEND/DENY]
    Rationale: [Brief rationale]
 
 📁 Files Created:

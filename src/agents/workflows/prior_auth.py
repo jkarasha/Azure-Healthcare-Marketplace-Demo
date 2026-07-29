@@ -49,7 +49,7 @@ from ..agents import (
 )
 from ..config import AgentConfig
 from ..tools import MCPToolKit
-from .parsing import extract_json_from_text, split_concurrent_outputs
+from .parsing import extract_json_from_text, extract_recommendation_from_text, split_concurrent_outputs
 
 logger = logging.getLogger(__name__)
 
@@ -774,13 +774,15 @@ async def run_prior_auth_workflow(
                 f"## Compliance Agent Output\n{compliance_text}\n\n"
                 f"## Clinical Review + Coverage Agent Outputs\n{concurrent_text}\n\n"
                 "Produce your final structured assessment JSON with:\n"
-                '  "recommendation": "APPROVE" or "PEND"\n'
+                '  "recommendation": "APPROVE", "PEND", or "DENY"\n'
                 '  "confidence_score": 0-100\n'
                 '  "confidence_breakdown": {provider, codes, policy, clinical, '
                 "doc_quality}\n"
                 '  "criteria_summary": [{criterion, status, evidence}]\n'
-                '  "pend_reasons": [...] if PEND\n'
-                '  "required_actions": [...] if PEND\n'
+                '  "approval_rationale": "if APPROVE: why criteria are met"\n'
+                '  "pend_reasons": [...] "if PEND: specific information gaps"\n'
+                '  "denial_rationale": "if DENY: mandatory criterion violated and clinical basis"\n'
+                '  "required_actions": [...] "if PEND: what must be provided; omit for DENY"\n'
                 '  "summary": "2-3 sentence executive summary"'
             )
 
@@ -851,9 +853,7 @@ async def run_prior_auth_workflow(
                     checks["criteria_threshold_met"] = assessment["recommendation"]["criteria_percentage"] >= 80
                     checks["confidence_threshold_met"] = confidence_score >= 60
             else:
-                rec = "PEND"
-                if "approve" in synthesis_text.lower() and "pend" not in synthesis_text.lower():
-                    rec = "APPROVE"
+                rec = extract_recommendation_from_text(synthesis_text)
                 assessment["recommendation"]["decision"] = rec
                 assessment["recommendation"]["rationale"] = synthesis_text[:500]
 

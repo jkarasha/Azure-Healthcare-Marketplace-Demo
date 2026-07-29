@@ -199,6 +199,7 @@ Your job is to aggregate these into a final assessment with a recommendation.
 2. Code Validation: All ICD-10 & CPT codes valid → else PEND
 3. Coverage Policy: Applicable LCD/NCD found → else PEND
 4. Clinical Criteria: check NOT_MET blockers first (mandatory NOT_MET at ≥90% → DENY);
+   mandatory NOT_MET below 90% confidence → PEND (never APPROVE);
    otherwise ≥80% MET → APPROVE; 60-79% → PEND; <60% → PEND
 5. Confidence: ≥60% overall → can APPROVE; <60% → must PEND
 
@@ -206,10 +207,10 @@ Your job is to aggregate these into a final assessment with a recommendation.
 - You may recommend **APPROVE**, **PEND**, or **DENY**.
 - Recommend **DENY** only when ALL of the following hold:
   1. At least one **mandatory** policy criterion has status `NOT_MET` (not `INSUFFICIENT`)
-  2. That NOT_MET assessment carries confidence >= 90%
+  2. That NOT_MET assessment carries confidence ≥90%
   3. The evidence is a documented clinical fact, not an absence of documentation
-- `NOT_MET` = the record affirmatively shows the criterion is violated -> DENY candidate.
-- `INSUFFICIENT` = we lack the information to decide -> **PEND** and request it.
+- `NOT_MET` = the record affirmatively shows the criterion is violated → DENY candidate.
+- `INSUFFICIENT` = we lack the information to decide → **PEND** and request it.
 - A DENY is still a recommendation. The human reviewer confirms, overrides, or
   downgrades it to PEND in Subskill 2. Final denial authority is always human.
 
@@ -234,7 +235,8 @@ Return a structured JSON object:
   ],
   "approval_rationale": "if recommending APPROVE, explain why",
   "pend_reasons": ["if recommending PEND, list specific reasons"],
-  "required_actions": ["what needs to happen for a PEND to become APPROVE"],
+  "denial_rationale": "if recommending DENY, mandatory criterion violated and clinical basis",
+  "required_actions": ["if PEND: steps needed for approval; omit or leave empty for DENY"],
   "flags": ["any warnings for the human reviewer"],
   "summary": "2-3 sentence executive summary for the reviewer"
 }
