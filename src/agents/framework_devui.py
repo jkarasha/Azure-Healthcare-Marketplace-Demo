@@ -75,9 +75,7 @@ def _create_entities(local: bool = False) -> list:
     from .tools import (
         CLINICAL_TRIALS_TOOLS_ALL,
         FHIR_TOOLS_ALL,
-        ICD10_TOOLS_COMPLIANCE,
         ICD10_TOOLS_SEARCH,
-        NPI_TOOLS_COMPLIANCE,
         NPI_TOOLS_SEARCH,
         PUBMED_TOOLS_ALL,
         REFERENCE_DATA_COMPLIANCE,
@@ -177,7 +175,17 @@ def _create_entities(local: bool = False) -> list:
     coverage_agent = create_coverage_agent(
         client=client,
         tools=[
-            ref_data("Reference Data (Coverage)", ICD10_TOOLS_SEARCH + ["search_coverage", "get_coverage_by_cpt", "get_coverage_by_icd10", "check_medical_necessity", "get_mac_jurisdiction"]),
+            ref_data(
+                "Reference Data (Coverage)",
+                [
+                    *ICD10_TOOLS_SEARCH,
+                    "search_coverage",
+                    "get_coverage_by_cpt",
+                    "get_coverage_by_icd10",
+                    "check_medical_necessity",
+                    "get_mac_jurisdiction",
+                ],
+            ),
         ],
     )
     synthesis_agent = create_synthesis_agent(client=client)
