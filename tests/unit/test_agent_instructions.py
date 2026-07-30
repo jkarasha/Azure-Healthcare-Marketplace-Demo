@@ -10,8 +10,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_PY = REPO_ROOT / "src" / "agents" / "agents.py"
+PRIOR_AUTH_PY = REPO_ROOT / "src" / "agents" / "workflows" / "prior_auth.py"
 RUBRIC = REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "references" / "rubric.md"
+SKILL_MD = REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "SKILL.md"
 SKILL_REFS_DIR = REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "references"
+PA_REPORT_DIR = REPO_ROOT / ".github" / "skills" / "pa-report-formatter"
 
 # Every file that is sent (verbatim or by reference) to an LLM during a
 # prior-auth workflow.  Coverage is by construction: if a surface is added
@@ -19,9 +22,10 @@ SKILL_REFS_DIR = REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "refere
 # added here.
 _LLM_FACING_SURFACES: list[Path] = [
     AGENTS_PY,
-    REPO_ROOT / "src" / "agents" / "workflows" / "prior_auth.py",
-    REPO_ROOT / ".github" / "skills" / "prior-auth-azure" / "SKILL.md",
-    *sorted(SKILL_REFS_DIR.glob("*.md")),
+    PRIOR_AUTH_PY,
+    SKILL_MD,
+    *sorted(SKILL_REFS_DIR.rglob("*.md")),
+    *sorted(PA_REPORT_DIR.rglob("*.md")),
 ]
 
 # Phrases that constitute a DENY prohibition — any one of these appearing in an
@@ -128,3 +132,51 @@ class TestSkillReferenceFilesAlignWithRubric:
                         f"This contradicts rubric.md — update the file to reflect the "
                         f"correct policy (DENY is permitted for NOT_MET at >=90% confidence)."
                     )
+
+
+class TestRuntimePromptDecisionSpace:
+    """The synthesis-agent runtime prompt in prior_auth.py must expose the
+    three-way decision space (APPROVE / PEND / DENY).  These are *positive*
+    assertions — a trivial typo or revert that collapses the option list to
+    two values must fail the suite immediately (I2-a).
+
+    Also guards SKILL.md and 04-determination.md, which feed the same
+    decision loop from the skill side.
+    """
+
+    def _read(self, path: Path) -> str:
+        return path.read_text(encoding="utf-8", errors="replace")
+
+    def test_prior_auth_py_synthesis_prompt_includes_deny(self):
+        """prior_auth.py must tell the synthesis agent that DENY is a valid output."""
+        text = self._read(PRIOR_AUTH_PY)
+        assert '"APPROVE", "PEND", or "DENY"' in text, (
+            'prior_auth.py synthesis prompt must contain \'\"APPROVE\", \"PEND\", or \"DENY\"\'; '
+            "reverting line 777 to a two-value option list silently removes DENY as an output."
+        )
+
+    def test_prior_auth_py_synthesis_prompt_includes_denial_rationale(self):
+        """prior_auth.py must request denial_rationale so DENY decisions surface clinical basis."""
+        text = self._read(PRIOR_AUTH_PY)
+        assert "denial_rationale" in text, (
+            "prior_auth.py must include 'denial_rationale' in the synthesis prompt; "
+            "without it DENY decisions lose their clinical justification."
+        )
+
+    def test_skill_md_includes_deny_decision_space(self):
+        """SKILL.md must document that DENY is a valid AI recommendation."""
+        text = self._read(SKILL_MD)
+        assert "APPROVE, PEND, or DENY" in text, (
+            "SKILL.md must document the three-way decision space (APPROVE/PEND/DENY); "
+            "a two-value reference contradicts the rubric."
+        )
+
+    def test_04_determination_md_includes_deny_in_purpose(self):
+        """04-determination.md Purpose line must list DENY alongside APPROVE/PEND."""
+        path = SKILL_REFS_DIR / "prompts" / "04-determination.md"
+        text = self._read(path)
+        # The Purpose line drives what the prompt module tells agents it produces.
+        assert "DENY" in text.splitlines()[3], (
+            "04-determination.md line 4 (Purpose) must include DENY; "
+            "omitting it contradicts the same file's decision logic at lines 116/129/163."
+        )

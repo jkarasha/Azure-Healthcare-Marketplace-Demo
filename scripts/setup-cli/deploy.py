@@ -386,7 +386,7 @@ def _show_post_deploy_copilot_guide(project_root: Path, apim_url: str = "") -> N
         Panel(
             "[italic]@healthcare /pa Review the attached PA request and clinical documents.\n"
             "Use rubric.md as the decision policy. Validate the provider NPI, ICD-10 codes,\n"
-            "and CPT codes using MCP tools. Return a draft assessment with APPROVE or PEND.[/italic]",
+            "and CPT codes using MCP tools. Return a draft assessment with APPROVE, PEND, or DENY.[/italic]",
             title="[highlight]Example Prompt 1 — Full PA Review[/highlight]",
             expand=False,
             border_style="green",

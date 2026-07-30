@@ -8,7 +8,7 @@ Architecture:
     Bead 001 (Intake):     Compliance Agent validates completeness (gate)
                            + RAG policy retrieval (folded into intake)
     Bead 002 (Clinical):   Clinical Reviewer + Coverage Agent run in parallel
-    Bead 003 (Recommend):  Synthesis Agent aggregates into APPROVE/PEND
+    Bead 003 (Recommend):  Synthesis Agent aggregates into APPROVE/PEND/DENY
 
   Subskill 2 — Decision & Notification (beads 004-005)
     Bead 004 (Decision):   Human decision capture (confirm/override)
@@ -818,7 +818,10 @@ async def run_prior_auth_workflow(
                     "confidence_score": confidence_score,
                     "rationale": synthesis_parsed.get(
                         "summary",
-                        synthesis_parsed.get("approval_rationale", synthesis_text[:500]),
+                        synthesis_parsed.get(
+                            "approval_rationale",
+                            synthesis_parsed.get("denial_rationale", synthesis_text[:500]),
+                        ),
                     ),
                     "criteria_met": f"{met_count}/{total}",
                     "criteria_percentage": round(met_count / total * 100),

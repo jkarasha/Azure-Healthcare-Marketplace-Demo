@@ -1,7 +1,7 @@
 # Prompt Module 04: Prior Authorization Determination
 
 > **Bead:** `bd-pa-003-recommend` — Steps 7-10
-> **Purpose:** Generate APPROVE/PEND recommendation using structured, rubric-aligned evaluation
+> **Purpose:** Generate APPROVE/PEND/DENY recommendation using structured, rubric-aligned evaluation
 > **When to load:** At the start of bead `bd-pa-003-recommend`
 > **Release after:** Context Checkpoint 3 (recommendation captured in `waypoints/assessment.json`)
 

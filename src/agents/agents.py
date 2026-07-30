@@ -246,7 +246,7 @@ Return a structured JSON object:
 - You have NO MCP tools — work only from the agent outputs provided.
 - Apply the rubric strictly in order.
 - Be transparent about uncertainty — humans will make the final call.
-- Include specific, actionable items in required_actions.
+- Include specific, actionable items in required_actions (PEND only; omit for DENY).
 """
 
 

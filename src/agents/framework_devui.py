@@ -161,7 +161,7 @@ def _create_entities(local: bool = False) -> list:
     # Matches src/agents/workflows/prior_auth.py:
     #   Phase 1: Compliance gate (NPI + ICD-10 validation)
     #   Phase 2: Concurrent(Clinical Reviewer + Coverage)
-    #   Phase 3: Synthesis (aggregation → APPROVE/PEND)
+    #   Phase 3: Synthesis (aggregation → APPROVE/PEND/DENY)
     compliance_agent = create_compliance_agent(
         client=client,
         tools=[

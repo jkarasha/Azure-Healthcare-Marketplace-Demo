@@ -317,7 +317,7 @@ Apply rubric.md decision rules:
 - All CPT codes valid
 - Coverage policy found
 - ≥80% of required criteria MET
-- No mandatory criterion is NOT_MET (any mandatory NOT_MET → PEND regardless of confidence)
+- No mandatory criterion is NOT_MET (any mandatory NOT_MET blocks APPROVE; see the DENY note below)
 - Overall confidence ≥60%
 
 **PEND** (any of these):

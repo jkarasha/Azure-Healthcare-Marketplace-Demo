@@ -160,7 +160,29 @@ _RECOMMENDATION_LABEL_RE = re.compile(
     r'"recommendation"\s*:\s*"(APPROVE|PEND|DENY)"',
     re.IGNORECASE,
 )
-_DENY_WORD_RE = re.compile(r"\bdeny\b", re.IGNORECASE)
+
+# "Recommendation: PEND." / "Decision: APPROVE" / "recommendation: deny"
+_DIRECTIVE_LABEL_RE = re.compile(
+    r"\b(?:recommendation|decision)\s*[:\s]+\s*(APPROVE|PEND|DENY)\b",
+    re.IGNORECASE,
+)
+
+# Negators that immediately precede "approve" — e.g. "cannot approve", "will not approve"
+# Covers single-word and two-word negators (word-boundary anchored).
+_NEGATED_APPROVE_RE = re.compile(
+    r"\b(?:not|cannot|can\s+not|unable\s+to|do\s+not|don't|won't|will\s+not|no|never"
+    r"|rather\s+than|instead\s+of)\s+approv\w*",
+    re.IGNORECASE,
+)
+
+# Explicit directive verb + "deny": "I recommend DENY", "must DENY", "should DENY"
+# Word-boundary on both sides so "denied"/"denial" do not match.
+_DIRECTIVE_DENY_RE = re.compile(
+    r"\b(?:recommend|recommends|recommending|must|should|will)\s+deny\b",
+    re.IGNORECASE,
+)
+
+_PEND_WORD_RE = re.compile(r"\bpend\b", re.IGNORECASE)
 _APPROVE_WORD_RE = re.compile(r"\bapprove\b", re.IGNORECASE)
 
 
@@ -168,26 +190,71 @@ def extract_recommendation_from_text(text: str) -> str:
     """Infer a recommendation value (APPROVE | PEND | DENY) from free-form text.
 
     Used only when JSON extraction has already failed so the synthesis-agent
-    response is being treated as plain prose. Strategy:
+    response is being treated as plain prose.
 
-    1. Look for an explicit JSON-style ``"recommendation": "VALUE"`` field —
-       the most reliable signal in a partially-malformed response.
-    2. Scan for standalone DENY / APPROVE keywords (word-boundary anchored so
-       ``"approved"`` does not match APPROVE). DENY takes priority over APPROVE
-       in ambiguous text: a false DENY degrades gracefully to human override
-       whereas a false APPROVE could bypass necessary review.
-    3. Default to PEND — the safest outcome; prompts human information-gathering
-       rather than granting or blocking coverage.
+    **Precedence ladder** (first match wins):
+
+    1. ``"recommendation": "VALUE"`` JSON/labelled field — the most reliable
+       signal in a partially-malformed response.
+    2. A directive label phrase such as ``Recommendation: PEND`` or
+       ``Decision: APPROVE`` — catches prose summaries that mirror JSON schema.
+    3. Any bare ``\\bpend\\b`` → **PEND** — if the agent wrote PEND anywhere,
+       that explicit safe outcome wins over an incidental APPROVE or DENY
+       keyword. This also neutralises prompt-option-list echoes such as
+       ``"APPROVE", "PEND", or "DENY" … I choose PEND``.
+    4. A negated-APPROVE phrase (``cannot approve``, ``unable to approve``,
+       ``will not approve``, etc.) → **PEND** — auto-approving a request the
+       agent explicitly declined to approve is the worst failure mode here.
+    5. An explicit directive DENY verb (``recommend DENY``, ``must DENY``,
+       ``should DENY``, ``will DENY``):
+       - If a competing ``\\bapprove\\b`` is also present → **PEND** (ambiguity
+         is never resolved in DENY's favour; the human reviewer handles it).
+       - Otherwise → **DENY**.
+    6. A bare ``\\bapprove\\b`` with no negator → **APPROVE**.
+    7. Default → **PEND** (the safe fallback; prompts human information-gathering
+       rather than granting or blocking coverage).
+
+    **Why PEND is the safe default, not DENY:**
+    A false DENY is a worse clinical and regulatory error than a false PEND.
+    PEND already degrades gracefully — it prompts the human to gather more
+    information. A false DENY blocks potentially necessary care and exposes
+    the payer to regulatory risk. DENY should only be emitted when the signal
+    is unambiguous.
+
+    **On ``denial``/``denied``:** ``\\bdeny\\b`` is word-boundary anchored, so
+    ``denied`` and ``denial`` never match the DENY branch. This is deliberate:
+    those forms appear naturally in procedural prose (``'the appeal was denied'``)
+    and are not directive recommendation signals.
     """
     if not isinstance(text, str):
         return "PEND"
 
+    # Step 1: explicit JSON/labelled field
     m = _RECOMMENDATION_LABEL_RE.search(text)
     if m:
         return m.group(1).upper()
 
-    if _DENY_WORD_RE.search(text):
+    # Step 2: directive label phrase ("Recommendation: PEND", "Decision: APPROVE")
+    m = _DIRECTIVE_LABEL_RE.search(text)
+    if m:
+        return m.group(1).upper()
+
+    # Step 3: any bare PEND keyword — safe outcome wins
+    if _PEND_WORD_RE.search(text):
+        return "PEND"
+
+    # Step 4: negated APPROVE → PEND
+    if _NEGATED_APPROVE_RE.search(text):
+        return "PEND"
+
+    # Step 5: directive DENY verb — only when unambiguous
+    if _DIRECTIVE_DENY_RE.search(text):
+        if _APPROVE_WORD_RE.search(text):
+            return "PEND"  # competing signals → ambiguity → PEND
         return "DENY"
+
+    # Step 6: plain APPROVE keyword
     if _APPROVE_WORD_RE.search(text):
         return "APPROVE"
+
     return "PEND"

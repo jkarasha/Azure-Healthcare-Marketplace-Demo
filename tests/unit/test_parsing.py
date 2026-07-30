@@ -211,9 +211,55 @@ class TestExtractRecommendationFromText:
     def test_standalone_approve_word(self):
         assert self.fn("The criteria are met; APPROVE the request.") == "APPROVE"
 
-    def test_deny_beats_approve_when_both_present(self):
-        # If both appear (ambiguous prose), DENY wins — safer for human review.
-        assert self.fn("Could APPROVE but must DENY given the violation.") == "DENY"
+    def test_pend_beats_deny_and_approve_when_all_ambiguous(self):
+        # C1-b: competing APPROVE + directive DENY → ambiguity → PEND (not DENY).
+        # A false DENY is a worse error than a false PEND.
+        assert self.fn("Could APPROVE but must DENY given the violation.") == "PEND"
+
+    # ------------------------------------------------------------------
+    # C1-a: negated-APPROVE strings must NOT auto-approve (regression guard)
+    # ------------------------------------------------------------------
+
+    def test_recommendation_pend_then_cannot_approve(self):
+        """Agent text: 'Recommendation: PEND. We cannot approve until...' → PEND (not APPROVE)."""
+        text = "Recommendation: PEND. We cannot approve until the missing sleep study arrives."
+        assert self.fn(text) == "PEND"
+
+    def test_unable_to_approve_returns_pend(self):
+        """'We are unable to approve at this time...' → PEND."""
+        assert self.fn("We are unable to approve at this time; more documentation required.") == "PEND"
+
+    def test_cannot_approve_returns_pend(self):
+        """Bare 'cannot approve' → PEND."""
+        assert self.fn("cannot approve") == "PEND"
+
+    def test_not_approved_returns_pend(self):
+        """'not approved' — word-boundary + no bare \\bapprove\\b → PEND."""
+        assert self.fn("not approved") == "PEND"
+
+    def test_do_not_approve_returns_pend(self):
+        """'do not approve' → PEND."""
+        assert self.fn("do not approve") == "PEND"
+
+    def test_will_not_approve_returns_pend(self):
+        """'will not approve' → PEND."""
+        assert self.fn("will not approve") == "PEND"
+
+    # ------------------------------------------------------------------
+    # C1-b: DENY must require a directive signal; ambiguous prose → PEND
+    # ------------------------------------------------------------------
+
+    def test_deny_in_negation_context_returns_pend(self):
+        """'This does not meet the bar to deny; PEND instead.' → PEND (PEND keyword wins)."""
+        assert self.fn("This does not meet the bar to deny; PEND instead.") == "PEND"
+
+    def test_policy_prose_deny_with_approve_conclusion(self):
+        """Policy prose mentioning 'deny' but concluding APPROVE → APPROVE (directive approve wins)."""
+        assert self.fn("Policy text: 'the plan may deny when criteria are unmet.' ... so APPROVE.") == "APPROVE"
+
+    def test_prompt_enum_echo_returns_pend(self):
+        """Model echoes prompt option list then chooses PEND — must NOT extract as DENY."""
+        assert self.fn("APPROVE, PEND, or DENY are the options; I choose PEND.") == "PEND"
 
     def test_approved_does_not_match_approve(self):
         # Word boundary: "approved" must NOT map to APPROVE.
