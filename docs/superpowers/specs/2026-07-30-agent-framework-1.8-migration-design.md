@@ -49,6 +49,34 @@ inspection of the installed packages:
 A partial fix is not viable: `main.py` imports all four workflows at module
 load, so the CLI stays broken until every site is migrated.
 
+### The call sites are NOT uniform
+
+The four workflows and `framework_devui.py` use **different keyword spellings**
+for the same client. This must not be assumed away during implementation:
+
+```python
+# The 4 workflows (prior_auth, clinical_trials, literature_search, patient_data)
+AzureOpenAIResponsesClient(
+    credential=credential,
+    endpoint=config.openai.endpoint,
+    deployment_name=config.openai.deployment_name,
+    api_version=config.openai.api_version,
+)
+
+# framework_devui.py — different kwargs
+AzureOpenAIResponsesClient(
+    azure_endpoint=endpoint,
+    azure_deployment=deployment,
+    credential=credential,
+    api_version=api_version,
+)
+```
+
+`framework_devui.py` also differs behaviorally: it wraps construction in a
+`try: DefaultAzureCredential() / except: AzureCliCredential()` fallback, and it
+reads endpoint/deployment from `os.getenv` directly rather than from
+`AgentConfig`.
+
 ## Verified replacement
 
 `OpenAIChatClient` in 1.8.0 is a unified client that accepts Azure parameters.
@@ -106,42 +134,90 @@ offline in the existing CI gate.
 **`src/agents/llm_client.py`** — the thin framework-touching factory.
 
 ```python
-def create_chat_client(config: AgentConfig, *, local: bool) -> OpenAIChatClient
+def create_chat_client(
+    config: AgentConfig,
+    *,
+    local: bool,
+    credential: object | None = None,
+) -> OpenAIChatClient
 ```
 
 Responsibilities:
 
-- Select the credential: `AzureCliCredential` when `local`, else
-  `DefaultAzureCredential`.
+- Select the credential: use `credential` if explicitly supplied; otherwise
+  `AzureCliCredential` when `local`, else `DefaultAzureCredential`.
 - Map `config.openai.endpoint` → `azure_endpoint`, `deployment_name` → `model`.
 - Apply `resolve_api_version`; omit the kwarg entirely when it returns `None`.
 
 It contains no other branching, so it needs no offline test; the local-only
 smoke test covers it.
 
+The explicit `credential` parameter exists solely so `framework_devui.py` can
+keep its existing `DefaultAzureCredential` → `AzureCliCredential` try/except
+fallback. Collapsing that fallback into the factory's `local` flag would be a
+**behavior change**, not a refactor: the current code retries on failure,
+whereas `local` selects one credential up front. The fallback stays at the
+devui call site.
+
+Note `AgentConfig` is imported from `agents.config`, which requires
+`python-dotenv`. That is acceptable here because `llm_client.py` already
+imports `agent_framework` and is therefore never importable by the offline
+suite. This is precisely why `resolve_api_version` lives in the separate
+stdlib-only `llm_options.py`.
+
 ### Call sites
 
-All 11 sites collapse to:
+The four workflows collapse to:
 
 ```python
 client = create_chat_client(config, local=local)
 ```
 
-`framework_devui.py` currently wraps construction in a
-`DefaultAzureCredential` → `AzureCliCredential` try/except. That fallback is
-preserved by passing `local` appropriately rather than duplicating the
-try/except inside the factory.
+`framework_devui.py` keeps its own try/except and passes the credential
+explicitly, preserving today's retry semantics exactly:
+
+```python
+try:
+    client = create_chat_client(config, local=False,
+                                credential=DefaultAzureCredential())
+except Exception:
+    logger.warning("DefaultAzureCredential failed, trying AzureCliCredential")
+    client = create_chat_client(config, local=False,
+                                credential=AzureCliCredential())
+```
+
+`framework_devui.py` currently reads endpoint/deployment from `os.getenv`
+rather than `AgentConfig`. The implementation must either build an
+`AgentConfig` there or keep those reads and pass them through; whichever is
+chosen, the existing "endpoint not set" error message and its guidance text
+must be preserved.
 
 ### Pinning
 
-`src/agents/requirements.txt` gets exact pins for the packages actually
-imported:
+`src/agents/requirements.txt` gets exact pins for **every** agent-framework
+distribution the repo actually imports, verified against the working venv:
 
 ```
 agent-framework==1.8.0
 agent-framework-core==1.8.0
+agent-framework-openai==1.8.0
 agent-framework-orchestrations==1.0.0rc3
+agent-framework-devui==1.0.0b260528
 ```
+
+`agent-framework-openai` is a **separate distribution** that provides
+`agent_framework.openai` (and therefore `OpenAIChatClient`, the class this
+migration depends on). Omitting it would leave the exact same drift hole this
+change exists to close. `agent-framework-devui` is required by
+`framework_devui.py`.
+
+Note that `agent-framework` is only a meta-package that requires
+`agent-framework-core[all]`, and `[all]` pulls ~20 sibling distributions
+unpinned. Pinning the five above constrains everything the repo imports
+directly; the remaining siblings stay unpinned by choice, since pinning
+packages the code never imports would create maintenance burden without
+reducing risk. If a future import reaches a new sibling, that sibling must be
+added here.
 
 The unpinned `>=` floor is the root cause and is removed.
 
@@ -158,16 +234,42 @@ The unpinned `>=` floor is the root cause and is removed.
 `resolve_api_version`: `None`, empty, whitespace, `preview`/`PREVIEW`, `v1`,
 `none`, and dated values that must pass through unchanged.
 
-**`tests/local/test_framework_api.py`** — deliberately **excluded from CI**
-(requires the full framework stack). Asserts the API surface the repo depends
-on still exists:
+**`tests/local/test_framework_api.py`** — deliberately **excluded from CI**.
+Asserts the API surface the repo depends on still exists:
 
 - `OpenAIChatClient.__init__` accepts `azure_endpoint`, `model`, `credential`,
   `api_version`.
 - `Agent.__init__` accepts `client`.
 - `ConcurrentBuilder.__init__` accepts `participants`.
 
+These are signature assertions only — no network, no credentials, no LLM calls.
+
 This is the test that would have caught this outage.
+
+### Excluding `tests/local` from the default run — required
+
+`pyproject.toml` sets `testpaths = ["tests"]`, so a bare `pytest` **would**
+collect `tests/local/` and fail with `ModuleNotFoundError: agent_framework`.
+The implementation must prevent this explicitly. Required changes:
+
+1. Add `--ignore=tests/local` to `[tool.pytest.ini_options] addopts` in
+   `pyproject.toml`, so bare `pytest` and `testpaths` both skip it.
+2. Add a `test-local` Make target that runs it **with the agents venv**, not
+   the `uv` venv:
+
+   ```
+   test-local:
+   	@src/agents/.venv/bin/python -m pytest tests/local -q
+   ```
+
+`make test-unit`, `make eval-all`, and the `python-unit-tests` CI job pass
+explicit paths (`tests/unit tests/eval`) and so are already unaffected; the
+`addopts` change protects the bare-`pytest` case, which is how a developer or a
+future CI job would most plausibly trip over it.
+
+Running `tests/local` under `uv run pytest` will always fail by design, because
+that venv intentionally excludes the framework. The Make target exists so the
+correct interpreter is not left to memory.
 
 ## Verification
 
