@@ -130,7 +130,8 @@
   "recommendation": {
     "decision": "PEND",
     "rationale": "Clinical evidence strongly supports medical necessity for adalimumab in this 10-year-old with moderate-to-severe Crohn's disease failing corticosteroid therapy. However, the PA form is entirely blank (no provider info, no NPI, no patient demographics, no medication details). Provider verification cannot be completed. Overall confidence 53.8% falls below the 60% threshold required for approval.",
-    "confidence": {
+    "confidence": "LOW",
+    "confidence_scores": {
       "provider_verification": 10,
       "code_validation": 50,
       "coverage_policy_match": 90,

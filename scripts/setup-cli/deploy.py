@@ -426,7 +426,7 @@ def _show_post_deploy_copilot_guide(project_root: Path, apim_url: str = "") -> N
         "  [muted]3.[/muted] Calls [server]cms-coverage[/server] MCP → checks Medicare coverage for CPT 32405"
     )
     console.print("  [muted]4.[/muted] Cross-references clinical evidence against rubric criteria")
-    console.print("  [muted]5.[/muted] Returns a structured draft assessment (APPROVE/PEND + justification)")
+    console.print(    "  [muted]5.[/muted] Returns a structured draft assessment (APPROVE/PEND/DENY + justification)")
     console.print()
     console.print("  All MCP tool calls go through APIM → Azure Function containers")
     console.print("  that you just deployed. The skills in [info].github/skills/[/info] guide")

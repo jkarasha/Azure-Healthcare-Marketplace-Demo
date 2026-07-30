@@ -280,3 +280,25 @@ class TestExtractRecommendationFromText:
         # Explicit JSON field (key in quotes) wins over standalone word in surrounding prose.
         text = '"recommendation": "PEND" but the word DENY appears later'
         assert self.fn(text) == "PEND"
+
+    # ------------------------------------------------------------------
+    # Prompt-echo guard: schema/option-list echos must resolve to PEND
+    # ------------------------------------------------------------------
+
+    def test_agents_py_prompt_echo_returns_pend(self):
+        """agents.py schema echo: "recommendation": "APPROVE" | "PEND" | "DENY" → PEND."""
+        text = (
+            'I could not complete the synthesis. My required output format was:\n'
+            '  "recommendation": "APPROVE" | "PEND" | "DENY",\n'
+            '  "confidence_score": 0-100,\nPlease retry.'
+        )
+        assert self.fn(text) == "PEND"
+
+    def test_prior_auth_py_prompt_echo_returns_pend(self):
+        """prior_auth.py schema echo: "recommendation": "APPROVE", "PEND", or "DENY" → PEND."""
+        text = (
+            'I could not complete the synthesis. My required output format was:\n'
+            '  "recommendation": "APPROVE", "PEND", or "DENY"\n'
+            '  "confidence_score": 0-100,\nPlease retry.'
+        )
+        assert self.fn(text) == "PEND"

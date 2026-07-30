@@ -161,6 +161,15 @@ _RECOMMENDATION_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Detects that the text immediately after a labelled-field match is an option-list
+# separator, meaning the match was an enum schema echo, not an actual value:
+#   "recommendation": "APPROVE" | "PEND" | "DENY"   (agents.py form)
+#   "recommendation": "APPROVE", "PEND", or "DENY"  (prior_auth.py form)
+_ENUM_TRAILER_RE = re.compile(
+    r'\s*[|,]\s*"?(APPROVE|PEND|DENY)\b',
+    re.IGNORECASE,
+)
+
 # "Recommendation: PEND." / "Decision: APPROVE" / "recommendation: deny"
 _DIRECTIVE_LABEL_RE = re.compile(
     r"\b(?:recommendation|decision)\s*[:\s]+\s*(APPROVE|PEND|DENY)\b",
@@ -195,13 +204,18 @@ def extract_recommendation_from_text(text: str) -> str:
     **Precedence ladder** (first match wins):
 
     1. ``"recommendation": "VALUE"`` JSON/labelled field — the most reliable
-       signal in a partially-malformed response.
+       signal in a partially-malformed response, **but only when unambiguous**.
+       If the first labelled match is immediately followed by ``|`` or ``,``
+       plus another option token (i.e. the text is an option-list schema echo
+       such as ``"recommendation": "APPROVE" | "PEND" | "DENY"`` or
+       ``"recommendation": "APPROVE", "PEND", or "DENY"``), or if multiple
+       *distinct* values appear in the labelled position, the match is treated
+       as ambiguous and falls through to **PEND**.
     2. A directive label phrase such as ``Recommendation: PEND`` or
        ``Decision: APPROVE`` — catches prose summaries that mirror JSON schema.
     3. Any bare ``\\bpend\\b`` → **PEND** — if the agent wrote PEND anywhere,
        that explicit safe outcome wins over an incidental APPROVE or DENY
-       keyword. This also neutralises prompt-option-list echoes such as
-       ``"APPROVE", "PEND", or "DENY" … I choose PEND``.
+       keyword.
     4. A negated-APPROVE phrase (``cannot approve``, ``unable to approve``,
        ``will not approve``, etc.) → **PEND** — auto-approving a request the
        agent explicitly declined to approve is the worst failure mode here.
@@ -229,9 +243,17 @@ def extract_recommendation_from_text(text: str) -> str:
     if not isinstance(text, str):
         return "PEND"
 
-    # Step 1: explicit JSON/labelled field
+    # Step 1: explicit JSON/labelled field — only when unambiguous
+    # If the match is immediately followed by | or , plus another option token
+    # (schema/option-list echo), or if multiple distinct values appear in the
+    # labelled position, treat as ambiguous → PEND.
     m = _RECOMMENDATION_LABEL_RE.search(text)
     if m:
+        if _ENUM_TRAILER_RE.match(text[m.end():]):
+            return "PEND"
+        all_vals = {v.upper() for v in _RECOMMENDATION_LABEL_RE.findall(text)}
+        if len(all_vals) > 1:
+            return "PEND"
         return m.group(1).upper()
 
     # Step 2: directive label phrase ("Recommendation: PEND", "Decision: APPROVE")

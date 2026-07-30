@@ -37,7 +37,10 @@ class TestGoldenCase:
 
     def test_golden_confidence_score_agrees_with_breakdown(self):
         rec = _golden_assessment()["recommendation"]
-        assert rec["confidence_score"] == rec["confidence"]["overall"], (
+        assert isinstance(rec["confidence"], str) and rec["confidence"] in {"HIGH", "MEDIUM", "LOW"}, (
+            f"recommendation.confidence must be a HIGH/MEDIUM/LOW string, got {rec['confidence']!r}"
+        )
+        assert rec["confidence_score"] == rec["confidence_scores"]["overall"], (
             "flat confidence_score must equal the per-dimension overall"
         )
 

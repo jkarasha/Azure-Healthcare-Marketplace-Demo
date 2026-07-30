@@ -132,7 +132,7 @@ test-unit:
 	@uv run pytest tests/unit tests/eval -q
 
 eval-prior-auth:
-	@uv run python scripts/eval_prior_auth.py --runs-dir data/cases
+	@uv run python scripts/eval_prior_auth.py
 
 eval-latency-local:
 	@python3 ./scripts/eval_latency.py --config ./scripts/evals/mcp-latency.local.json
