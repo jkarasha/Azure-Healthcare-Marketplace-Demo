@@ -122,7 +122,7 @@ CRITERIA MET: [N]/[Total] ([Percentage]%)
 OVERALL CONFIDENCE: [X]% ([HIGH/MEDIUM/LOW])
 ───────────────────────────────────────────────────────────────
 
-📝 AI RECOMMENDATION: [APPROVE/PEND]
+📝 AI RECOMMENDATION: [APPROVE/PEND/DENY]
 ───────────────────────────────────────────────────────────────
 Rationale: [Brief rationale]
 
@@ -212,7 +212,7 @@ Include bead state in the decision waypoint:
   },
 
   "override_details": {
-    "original_recommendation": "APPROVE/PEND",
+    "original_recommendation": "APPROVE/PEND/DENY",
     "final_decision": "...",
     "override_reason": "...",
     "overriding_authority": "..."

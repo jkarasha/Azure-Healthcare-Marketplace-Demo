@@ -67,26 +67,17 @@ EXPECTED_TOOL_USAGE = {
 }
 
 # ============================================================================
-# Assessment schema contract
+# Assessment schema contract — owned by the workflow, consumed here
 # ============================================================================
 
-REQUIRED_TOP_LEVEL_KEYS = {
-    "request_id",
-    "workflow_id",
-    "status",
-    "beads",
-    "request",
-    "clinical",
-    "policy",
-    "recommendation",
-}
-
-REQUIRED_REQUEST_KEYS = {"member", "service", "provider"}
-REQUIRED_RECOMMENDATION_KEYS = {"decision", "confidence", "confidence_score", "rationale"}
-VALID_DECISIONS = {"APPROVE", "PEND", "DENY"}
-
-REQUIRED_POLICY_KEYS = {"policy_id", "policy_title", "medical_necessity_check"}
-REQUIRED_CLINICAL_KEYS = {"chief_complaint", "key_findings"}
+from agents.workflows.assessment_schema import (  # noqa: E402,I001
+    REQUIRED_CLINICAL_KEYS,
+    REQUIRED_POLICY_KEYS,
+    REQUIRED_RECOMMENDATION_KEYS,
+    REQUIRED_REQUEST_KEYS,
+    REQUIRED_TOP_LEVEL_KEYS,
+    VALID_DECISIONS,
+)
 
 
 # ============================================================================

@@ -142,30 +142,14 @@ def load_input(args: argparse.Namespace) -> dict:
 
 
 def _get_demo_data(workflow: str) -> dict:
-    """Return minimal demo data for each workflow."""
+    """Return minimal demo data for workflows without a SAMPLE_DATA file.
+
+    Workflows that have a SAMPLE_DATA entry are served by load_input() reading that file.
+    If load_input() reaches this function for such a workflow, the sample file is missing —
+    we raise FileNotFoundError with an actionable message rather than silently returning
+    an empty or mismatched dict.
+    """
     demo_data = {
-        "prior-auth": {
-            "member": {
-                "id": "MEM-12345",
-                "name": "Jane Smith",
-                "dob": "1965-03-15",
-                "plan": "Medicare Advantage PPO",
-            },
-            "provider": {
-                "npi": "1234567890",
-                "name": "Dr. Robert Johnson",
-                "specialty": "Pulmonology",
-            },
-            "service": {
-                "cpt_code": "71260",
-                "description": "CT Chest with contrast",
-                "icd10_codes": ["J84.10", "R91.8"],
-                "place_of_service": "Outpatient Hospital",
-            },
-            "clinical_summary": "Patient presents with progressive dyspnea and "
-            "interstitial lung disease. CT chest requested to evaluate disease "
-            "progression and guide treatment planning.",
-        },
         "clinical-trial": {
             "condition": "Non-small cell lung cancer",
             "intervention_type": "Drug",
@@ -184,7 +168,17 @@ def _get_demo_data(workflow: str) -> dict:
             "keywords": "cardiovascular outcomes",
         },
     }
-    return demo_data.get(workflow, {})
+    if workflow not in demo_data:
+        sample_paths = SAMPLE_DATA.get(workflow, [])
+        if sample_paths:
+            paths = [sample_paths] if isinstance(sample_paths, str) else list(sample_paths)
+            raise FileNotFoundError(
+                f"--demo sample file for workflow '{workflow}' not found.\n"
+                f"  Expected location(s): {', '.join(paths)}\n"
+                f"  Restore the file from git or run from the repository root."
+            )
+        return {}
+    return demo_data[workflow]
 
 
 async def main_async(args: argparse.Namespace) -> None:

@@ -8,7 +8,7 @@ Architecture:
     Bead 001 (Intake):     Compliance Agent validates completeness (gate)
                            + RAG policy retrieval (folded into intake)
     Bead 002 (Clinical):   Clinical Reviewer + Coverage Agent run in parallel
-    Bead 003 (Recommend):  Synthesis Agent aggregates into APPROVE/PEND
+    Bead 003 (Recommend):  Synthesis Agent aggregates into APPROVE/PEND/DENY
 
   Subskill 2 — Decision & Notification (beads 004-005)
     Bead 004 (Decision):   Human decision capture (confirm/override)
@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -49,6 +48,7 @@ from ..agents import (
 )
 from ..config import AgentConfig
 from ..tools import MCPToolKit
+from .parsing import extract_json_from_text, extract_recommendation_from_text, split_concurrent_outputs
 
 logger = logging.getLogger(__name__)
 
@@ -206,34 +206,12 @@ def _write_output_file(path: Path, content: str) -> None:
 
 
 def _extract_json_from_text(text: str) -> dict | None:
-    """Try to extract a JSON object from agent text output."""
-    try:
-        return json.loads(text)
-    except (json.JSONDecodeError, TypeError):
-        pass
-    # Look for ```json ... ``` blocks
-    m = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(1))
-        except json.JSONDecodeError:
-            pass
-    # Look for the first { ... } block
-    brace_depth = 0
-    start = None
-    for i, ch in enumerate(text):
-        if ch == "{":
-            if brace_depth == 0:
-                start = i
-            brace_depth += 1
-        elif ch == "}":
-            brace_depth -= 1
-            if brace_depth == 0 and start is not None:
-                try:
-                    return json.loads(text[start : i + 1])
-                except json.JSONDecodeError:
-                    start = None
-    return None
+    """Try to extract a JSON object from agent text output.
+
+    Thin wrapper kept for call-site compatibility; the implementation lives
+    in ``parsing.py`` so it can be unit tested without the agent framework.
+    """
+    return extract_json_from_text(text)
 
 
 def _safe_get(d: dict | None, *keys: str, default: Any = None) -> Any:
@@ -687,8 +665,19 @@ async def run_prior_auth_workflow(
             concurrent_text = str(concurrent_results)
             logger.info("Bead 002: Concurrent phase produced %d chars", len(concurrent_text))
 
-            # --- Parse clinical reviewer output ---
-            clinical_parsed = _extract_json_from_text(concurrent_text)
+            # --- Parse both agents' outputs from the concatenated result ---
+            # ConcurrentBuilder returns one string containing both agents'
+            # JSON in nondeterministic order; identify each by a schema-unique
+            # key rather than by offset.
+            clinical_parsed, coverage_parsed = split_concurrent_outputs(
+                concurrent_text,
+                first_marker="clinical_summary",
+                second_marker="applicable_policies",
+            )
+            if clinical_parsed is None:
+                logger.warning("Bead 002: no parseable ClinicalReviewer output")
+            if coverage_parsed is None:
+                logger.warning("Bead 002: no parseable CoverageAgent output")
             if clinical_parsed:
                 cs = _safe_get(clinical_parsed, "clinical_summary", default={})
                 assessment["clinical"]["chief_complaint"] = cs.get(
@@ -726,16 +715,6 @@ async def run_prior_auth_workflow(
                 if fhir_ctx:
                     assessment["fhir_patient_context"]["patient_found"] = True
                     assessment["fhir_patient_context"]["active_conditions"] = fhir_ctx.get("conditions", [])
-
-            # --- Parse coverage agent output ---
-            coverage_parsed = None
-            if clinical_parsed and "coverage_status" in clinical_parsed:
-                coverage_parsed = clinical_parsed
-            else:
-                first_close = concurrent_text.find("}")
-                if first_close > 0:
-                    remainder = concurrent_text[first_close + 1 :]
-                    coverage_parsed = _extract_json_from_text(remainder)
 
             if coverage_parsed and "applicable_policies" in coverage_parsed:
                 policies = coverage_parsed.get("applicable_policies", [])
@@ -794,13 +773,15 @@ async def run_prior_auth_workflow(
                 f"## Compliance Agent Output\n{compliance_text}\n\n"
                 f"## Clinical Review + Coverage Agent Outputs\n{concurrent_text}\n\n"
                 "Produce your final structured assessment JSON with:\n"
-                '  "recommendation": "APPROVE" or "PEND"\n'
+                '  "recommendation": "APPROVE", "PEND", or "DENY"\n'
                 '  "confidence_score": 0-100\n'
                 '  "confidence_breakdown": {provider, codes, policy, clinical, '
                 "doc_quality}\n"
                 '  "criteria_summary": [{criterion, status, evidence}]\n'
-                '  "pend_reasons": [...] if PEND\n'
-                '  "required_actions": [...] if PEND\n'
+                '  "approval_rationale": "if APPROVE: why criteria are met"\n'
+                '  "pend_reasons": [...] "if PEND: specific information gaps"\n'
+                '  "denial_rationale": "if DENY: mandatory criterion violated and clinical basis"\n'
+                '  "required_actions": [...] "if PEND: what must be provided; omit for DENY"\n'
                 '  "summary": "2-3 sentence executive summary"'
             )
 
@@ -836,7 +817,10 @@ async def run_prior_auth_workflow(
                     "confidence_score": confidence_score,
                     "rationale": synthesis_parsed.get(
                         "summary",
-                        synthesis_parsed.get("approval_rationale", synthesis_text[:500]),
+                        synthesis_parsed.get(
+                            "approval_rationale",
+                            synthesis_parsed.get("denial_rationale", synthesis_text[:500]),
+                        ),
                     ),
                     "criteria_met": f"{met_count}/{total}",
                     "criteria_percentage": round(met_count / total * 100),
@@ -871,9 +855,7 @@ async def run_prior_auth_workflow(
                     checks["criteria_threshold_met"] = assessment["recommendation"]["criteria_percentage"] >= 80
                     checks["confidence_threshold_met"] = confidence_score >= 60
             else:
-                rec = "PEND"
-                if "approve" in synthesis_text.lower() and "pend" not in synthesis_text.lower():
-                    rec = "APPROVE"
+                rec = extract_recommendation_from_text(synthesis_text)
                 assessment["recommendation"]["decision"] = rec
                 assessment["recommendation"]["rationale"] = synthesis_text[:500]
 

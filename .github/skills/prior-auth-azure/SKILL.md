@@ -68,7 +68,7 @@ flowchart TD
             S1C["3. Extract clinical data from documentation"]
             S1Lit["4. PubMed evidence search (optional)<br/>via mcp-clinical-research"]
             S1D["5. Map evidence to policy criteria"]
-            S1E["6. Generate recommendation (APPROVE/PEND)"]
+            S1E["6. Generate recommendation (APPROVE/PEND/DENY)"]
             S1A --> S1B --> S1C --> S1Lit --> S1D --> S1E
         end
 
@@ -103,7 +103,7 @@ flowchart TD
 - Enriches clinical context via **`mcp-clinical-research`** FHIR tools (optional)
 - Maps clinical evidence to policy criteria
 - Performs medical necessity assessment
-- Generates recommendation (APPROVE/PEND)
+- Generates recommendation (APPROVE/PEND/DENY)
 - **Output:** `waypoints/assessment.json` (consolidated)
 - **Data Sources:** `mcp-reference-data` (NPI + ICD-10 + CMS, parallel), CMS Fee Schedule (web), `mcp-clinical-research` (PubMed + FHIR, optional)
 

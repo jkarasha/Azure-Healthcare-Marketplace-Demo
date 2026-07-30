@@ -27,7 +27,6 @@ from tests.eval.prior_auth_eval import (
     format_report,
 )
 
-
 # ============================================================================
 # pytest tests — run offline against existing waypoints
 # ============================================================================

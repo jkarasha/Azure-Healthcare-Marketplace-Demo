@@ -31,7 +31,7 @@ This subskill uses **2 consolidated MCP servers** for healthcare data validation
 4. Extracts clinical data and maps to policy criteria
 5. Searches PubMed for supporting literature (optional, strengthens evidence)
 6. Performs medical necessity assessment
-7. Generates recommendation (APPROVE/PEND)
+7. Generates recommendation (APPROVE/PEND/DENY)
 
 ---
 
@@ -317,6 +317,7 @@ Apply rubric.md decision rules:
 - All CPT codes valid
 - Coverage policy found
 - ≥80% of required criteria MET
+- No mandatory criterion is NOT_MET (any mandatory NOT_MET blocks APPROVE; see the DENY note below)
 - Overall confidence ≥60%
 
 **PEND** (any of these):
@@ -325,7 +326,7 @@ Apply rubric.md decision rules:
 - Confidence <60% → Request clarification
 - Borderline case → Request medical director review
 
-**Note:** AI never recommends DENY in default mode.
+**Note:** DENY is permitted when a mandatory criterion is `NOT_MET` at ≥90% confidence and the record affirmatively shows the violation (not merely missing documentation). `INSUFFICIENT` evidence yields PEND, not DENY. A DENY recommendation is confirmed, overridden, or downgraded to PEND by the human reviewer in Subskill 2.
 
 ---
 
@@ -399,7 +400,7 @@ Apply rubric.md decision rules:
   ],
 
   "recommendation": {
-    "decision": "APPROVE/PEND",
+    "decision": "APPROVE/PEND/DENY",
     "confidence": "HIGH/MEDIUM/LOW",
     "confidence_score": 0-100,
     "rationale": "...",
@@ -437,7 +438,7 @@ All decisions require human clinical review before finalization.
    - Member details (name, ID, DOB)
    - Service description
    - Provider details (name, NPI, specialty)
-   - Decision (APPROVE/PEND)
+   - Decision (APPROVE/PEND/DENY)
    - Overall confidence (percentage and level)
 
 2. **Clinical Synopsis**
@@ -480,7 +481,7 @@ All decisions require human clinical review before finalization.
    Criteria Met: [N]/[Total]
    Confidence: [Percentage]% ([Level])
 
-📝 RECOMMENDATION: [APPROVE/PEND]
+📝 RECOMMENDATION: [APPROVE/PEND/DENY]
    Rationale: [Brief rationale]
 
 📁 Files Created:

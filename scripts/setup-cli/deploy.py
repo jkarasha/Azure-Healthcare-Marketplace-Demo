@@ -372,8 +372,6 @@ def _show_post_deploy_copilot_guide(project_root: Path, apim_url: str = "") -> N
             console.print(f"     📎 [info]{f.relative_to(project_root)}[/info]")
     else:
         console.print("     📎 data/sample_cases/prior_auth_baseline/pa_request.json")
-        console.print("     📎 data/sample_cases/prior_auth_baseline/ct_chest_report.txt")
-        console.print("     📎 data/sample_cases/prior_auth_baseline/pulmonology_consultation.txt")
 
     console.print()
     console.print("     [muted]Tip: In Copilot Chat, click the 📎 (Attach) button or drag files into the chat[/muted]")
@@ -388,7 +386,7 @@ def _show_post_deploy_copilot_guide(project_root: Path, apim_url: str = "") -> N
         Panel(
             "[italic]@healthcare /pa Review the attached PA request and clinical documents.\n"
             "Use rubric.md as the decision policy. Validate the provider NPI, ICD-10 codes,\n"
-            "and CPT codes using MCP tools. Return a draft assessment with APPROVE or PEND.[/italic]",
+            "and CPT codes using MCP tools. Return a draft assessment with APPROVE, PEND, or DENY.[/italic]",
             title="[highlight]Example Prompt 1 — Full PA Review[/highlight]",
             expand=False,
             border_style="green",
@@ -428,7 +426,7 @@ def _show_post_deploy_copilot_guide(project_root: Path, apim_url: str = "") -> N
         "  [muted]3.[/muted] Calls [server]cms-coverage[/server] MCP → checks Medicare coverage for CPT 32405"
     )
     console.print("  [muted]4.[/muted] Cross-references clinical evidence against rubric criteria")
-    console.print("  [muted]5.[/muted] Returns a structured draft assessment (APPROVE/PEND + justification)")
+    console.print(    "  [muted]5.[/muted] Returns a structured draft assessment (APPROVE/PEND/DENY + justification)")
     console.print()
     console.print("  All MCP tool calls go through APIM → Azure Function containers")
     console.print("  that you just deployed. The skills in [info].github/skills/[/info] guide")
@@ -469,16 +467,15 @@ def _show_post_deploy_copilot_guide(project_root: Path, apim_url: str = "") -> N
     console.print(
         Panel(
             "[bold]💡 Key Insight:[/bold]\n\n"
-            "The sample files in [info]data/sample_cases/prior_auth_baseline/[/info]\n"
-            "are designed to work together as a complete prior-auth test case:\n\n"
-            "  • [bold]pa_request.json[/bold]              — The PA request (patient, CPT, ICD-10, provider)\n"
-            "  • [bold]ct_chest_report.txt[/bold]          — CT imaging report (clinical evidence)\n"
-            "  • [bold]pet_scan_report.txt[/bold]          — PET scan results (additional evidence)\n"
-            "  • [bold]pulmonology_consultation.txt[/bold] — Specialist consultation note\n\n"
-            "Upload all of them to Copilot Chat for the most complete PA review demo.\n"
+            "The sample file in [info]data/sample_cases/prior_auth_baseline/[/info]\n"
+            "is a synthetic pediatric Crohn's / adalimumab prior-auth request:\n\n"
+            "  • [bold]pa_request.json[/bold] — PA request for adalimumab (J0135) for an 11-year-old\n"
+            "                         with moderate-to-severe Crohn's disease (K50.80),\n"
+            "                         failing corticosteroid therapy (methylprednisolone)\n\n"
+            "Upload it to Copilot Chat for a complete PA review demo.\n"
             "Copilot + MCP tools will validate codes, check coverage, and cross-reference\n"
-            "the clinical documents against policy criteria — all automatically.",
-            title="[header]Sample Files Explained[/header]",
+            "the clinical evidence against policy criteria — all automatically.",
+            title="[header]Sample File Explained[/header]",
             expand=False,
         )
     )

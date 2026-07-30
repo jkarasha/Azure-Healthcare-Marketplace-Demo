@@ -20,9 +20,11 @@ import json
 import sys
 from pathlib import Path
 
-# Add project root to path
+# Add project root and src/ to path — the eval harness imports the assessment
+# contract from agents.workflows, which lives under src/.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from tests.eval.prior_auth_eval import (  # noqa: E402
     CaseEvalReport,

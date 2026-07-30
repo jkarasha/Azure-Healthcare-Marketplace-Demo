@@ -11,7 +11,7 @@ Run with:
 
 import pytest
 
-from tests.conftest import CANONICAL_ALL_TOOLS, CANONICAL_TOOLS
+from tests.conftest import CANONICAL_ALL_TOOLS
 
 pytestmark = pytest.mark.integration
 
@@ -95,39 +95,39 @@ class TestLegacyFixturesReachTools:
     def test_mcp_npi_has_npi_tools(self, mcp_npi):
         """Legacy mcp_npi fixture reaches NPI tools on reference-data."""
         names = mcp_npi.get_tool_names()
-        assert LEGACY_NPI_TOOLS <= names, f"Missing NPI tools: {LEGACY_NPI_TOOLS - names}"
+        assert names >= LEGACY_NPI_TOOLS, f"Missing NPI tools: {LEGACY_NPI_TOOLS - names}"
 
     def test_mcp_icd10_has_icd10_tools(self, mcp_icd10):
         """Legacy mcp_icd10 fixture reaches ICD-10 tools on reference-data."""
         names = mcp_icd10.get_tool_names()
-        assert LEGACY_ICD10_TOOLS <= names, f"Missing ICD-10 tools: {LEGACY_ICD10_TOOLS - names}"
+        assert names >= LEGACY_ICD10_TOOLS, f"Missing ICD-10 tools: {LEGACY_ICD10_TOOLS - names}"
 
     def test_mcp_cms_has_cms_tools(self, mcp_cms):
         """Legacy mcp_cms fixture reaches CMS tools on reference-data."""
         names = mcp_cms.get_tool_names()
-        assert LEGACY_CMS_TOOLS <= names, f"Missing CMS tools: {LEGACY_CMS_TOOLS - names}"
+        assert names >= LEGACY_CMS_TOOLS, f"Missing CMS tools: {LEGACY_CMS_TOOLS - names}"
 
     def test_mcp_fhir_has_fhir_tools(self, mcp_fhir):
         """Legacy mcp_fhir fixture reaches FHIR tools on clinical-research."""
         names = mcp_fhir.get_tool_names()
-        assert LEGACY_FHIR_TOOLS <= names, f"Missing FHIR tools: {LEGACY_FHIR_TOOLS - names}"
+        assert names >= LEGACY_FHIR_TOOLS, f"Missing FHIR tools: {LEGACY_FHIR_TOOLS - names}"
 
     def test_mcp_pubmed_has_pubmed_tools(self, mcp_pubmed):
         """Legacy mcp_pubmed fixture reaches PubMed tools on clinical-research."""
         names = mcp_pubmed.get_tool_names()
-        assert LEGACY_PUBMED_TOOLS <= names, f"Missing PubMed: {LEGACY_PUBMED_TOOLS - names}"
+        assert names >= LEGACY_PUBMED_TOOLS, f"Missing PubMed: {LEGACY_PUBMED_TOOLS - names}"
 
     def test_mcp_clinical_trials_has_trials_tools(self, mcp_clinical_trials):
         """Legacy mcp_clinical_trials fixture reaches Trials tools on clinical-research."""
         names = mcp_clinical_trials.get_tool_names()
-        assert LEGACY_CLINICAL_TRIALS_TOOLS <= names, (
+        assert names >= LEGACY_CLINICAL_TRIALS_TOOLS, (
             f"Missing Trials tools: {LEGACY_CLINICAL_TRIALS_TOOLS - names}"
         )
 
     def test_mcp_cosmos_rag_has_rag_tools(self, mcp_cosmos_rag):
         """Legacy mcp_cosmos_rag fixture reaches RAG tools on cosmos-rag."""
         names = mcp_cosmos_rag.get_tool_names()
-        assert LEGACY_COSMOS_RAG_TOOLS <= names, (
+        assert names >= LEGACY_COSMOS_RAG_TOOLS, (
             f"Missing RAG tools: {LEGACY_COSMOS_RAG_TOOLS - names}"
         )
 

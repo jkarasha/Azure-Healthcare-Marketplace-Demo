@@ -26,7 +26,7 @@ from ..agents import (
     create_trials_correlation_agent,
 )
 from ..config import AgentConfig
-from ..tools import MCPToolKit, CLINICAL_TRIALS_TOOLS_ALL, create_clinical_research_tool
+from ..tools import CLINICAL_TRIALS_TOOLS_ALL, MCPToolKit, create_clinical_research_tool
 
 logger = logging.getLogger(__name__)
 

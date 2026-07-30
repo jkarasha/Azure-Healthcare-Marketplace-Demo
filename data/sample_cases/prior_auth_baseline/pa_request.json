@@ -1,0 +1,57 @@
+{
+  "request_id": "PA-BASELINE-0001",
+  "data_classification": "SYNTHETIC — no real patient or provider data",
+  "submitted_at": "2026-07-28T00:00:00Z",
+  "member": {
+    "name": "Jordan Sample",
+    "id": "MRN-000-BASELINE",
+    "dob": "2014-10-19",
+    "age": "11 years",
+    "sex": "Female",
+    "plan": "PLAN-COMMERCIAL-001",
+    "state": "WA"
+  },
+  "provider": {
+    "name": "Dr. Alex Sample",
+    "npi": "1234567890",
+    "specialty": "Pediatric Gastroenterology",
+    "state": "WA",
+    "contact": {
+      "office_phone": "555-0100",
+      "fax": "555-0101"
+    }
+  },
+  "service": {
+    "description": "Adalimumab (Humira)",
+    "cpt_code": "J0135",
+    "type": "Biologic Therapy",
+    "icd10_codes": ["K50.80"],
+    "place_of_service": "Outpatient",
+    "dosage": "40 mg subcutaneous every other week after induction",
+    "duration": "6 months",
+    "urgency": "standard",
+    "rationale": "Initiation of biologic therapy for moderate-to-severe Crohn's disease refractory to corticosteroid therapy"
+  },
+  "diagnosis": {
+    "icd10_codes": ["K50.80"],
+    "primary_diagnosis": "Crohn's disease of both small and large intestine, without complications"
+  },
+  "clinical_summary": "11-year-old with endoscopically-confirmed Crohn's disease (biopsies pending). Currently on methylprednisolone 40 mg daily with inadequate response: ongoing hematochezia, abdominal cramping, and worsening microcytic anemia (Hgb 9.0) requiring transfusion. Colonoscopy shows ileal ulceration with segmental strictures and colonic cobblestoning with skip areas.",
+  "prior_treatments": [
+    {
+      "treatment": "Methylprednisolone 40 mg daily",
+      "duration": "6 weeks",
+      "outcome": "Inadequate response — persistent bleeding and anemia"
+    }
+  ],
+  "supporting_evidence": {
+    "labs": {
+      "hemoglobin": 9.0,
+      "hematocrit": 32,
+      "esr": 30,
+      "crp": 25,
+      "fecal_calprotectin": 150
+    },
+    "imaging": "MR enterography pending; colonoscopy and EGD completed with biopsies"
+  }
+}

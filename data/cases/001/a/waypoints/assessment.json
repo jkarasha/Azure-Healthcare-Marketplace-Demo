@@ -1,4 +1,7 @@
 {
+  "request_id": "CASE-001-A",
+  "workflow_id": "case-001-a-reference",
+  "status": "awaiting-human-decision",
   "beads": [
     {"id": "bd-pa-001-intake", "status": "completed", "completed_at": "2026-02-12T00:00:00Z"},
     {"id": "bd-pa-002-clinical", "status": "completed", "completed_at": "2026-02-12T00:01:00Z"},
@@ -37,6 +40,14 @@
     }
   },
   "clinical": {
+    "chief_complaint": "Steroid-refractory Crohn's disease with hematochezia and symptomatic anemia",
+    "key_findings": [
+      "Hgb 9.0 (LOW), Hct 32%, MCV 78 — microcytic anemia requiring pRBC transfusion",
+      "ESR 30, CRP 25, fecal calprotectin 150 — active inflammation",
+      "Colonoscopy: ileal ulceration with segmental strictures, colonic cobblestoning, aphthous ulcers with skip areas",
+      "Methylprednisolone 40mg daily with inadequate response — ongoing hematochezia x3 overnight",
+      "HR 110 with pallor and dizziness — hemodynamically significant anemia"
+    ],
     "diagnosis": "Crohn's disease (IBD) — ileal and colonic involvement with strictures, cobblestoning, aphthous ulcers",
     "icd_10_code": "K50.80 (inferred — Crohn's disease of both small and large intestine, without complications). Consider K50.811 (with rectal bleeding) given hematochezia.",
     "prior_treatments_and_results": "Methylprednisolone 40mg daily — currently failing. Patient has ongoing hematochezia (x3 episodes overnight), abdominal cramping, and worsening anemia (Hgb 9.0) requiring pRBC transfusion.",
@@ -76,7 +87,13 @@
       "OR patient had ileocolonic resection",
       "Prescribed by or in consultation with a gastroenterologist"
     ],
-    "approval_duration": "6 months (initial therapy)"
+    "approval_duration": "6 months (initial therapy)",
+    "medical_necessity_check": {
+      "is_covered": true,
+      "policy_basis": "Section 2.A — patient is >= 6 years old and is currently taking corticosteroids with inadequate response, satisfying criterion 2.A.ii(a). Criterion 2.A.iii (gastroenterologist involvement) is INSUFFICIENT because the PA form does not identify a prescribing physician.",
+      "criteria_met_count": 2,
+      "criteria_total_count": 3
+    }
   },
   "criteria_evaluation": [
     {
@@ -113,6 +130,7 @@
   "recommendation": {
     "decision": "PEND",
     "rationale": "Clinical evidence strongly supports medical necessity for adalimumab in this 10-year-old with moderate-to-severe Crohn's disease failing corticosteroid therapy. However, the PA form is entirely blank (no provider info, no NPI, no patient demographics, no medication details). Provider verification cannot be completed. Overall confidence 53.8% falls below the 60% threshold required for approval.",
+    "confidence": "LOW",
     "confidence_scores": {
       "provider_verification": 10,
       "code_validation": 50,
@@ -121,6 +139,7 @@
       "documentation_quality": 30,
       "overall": 53.8
     },
+    "confidence_score": 53.8,
     "gaps": [
       "PA form is completely blank — all required fields must be completed",
       "Provider NPI required for verification",
