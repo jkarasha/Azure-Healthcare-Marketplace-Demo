@@ -57,6 +57,7 @@ moving on.
 | `pyproject.toml` | Modify | `addopts` gains `--ignore=tests/local`. |
 | `Makefile` | Modify | New `test-local` target. |
 | `.env.example` | Modify | Clear the stale `AZURE_OPENAI_API_VERSION`. |
+| `src/agents/devui.py` | Modify | Lines 239, 247, 591 → stop writing back the rejected api_version. |
 | `tests/unit/test_llm_options.py` | Create | Offline test of the api_version rule. Runs in CI. |
 | `tests/local/test_framework_api.py` | Create | Framework API-drift guard. Excluded from CI. |
 
@@ -864,20 +865,34 @@ git show --numstat HEAD
 
 ## Task 7: Clear the stale API version
 
-`.env.example` advertises an `api_version` that the live resource rejects.
+`.env.example` advertises an `api_version` that the live resource rejects, and
+the DevUI settings panel actively **writes it back**.
 
 **Files:**
 - Modify: `.env.example`
+- Modify: `src/agents/devui.py` (lines 239, 247, 591)
 
 `.env` itself is gitignored — the human updates their own copy.
 
-- [ ] **Step 1: Inspect the current value**
+`src/agents/devui.py` is a **different file** from `src/agents/framework_devui.py`
+(Task 4). It does not import the removed client class, which is why it is not in
+the 5-file migration map. It matters anyway: its settings panel defaults
+`api_version` to `2025-01-01-preview`, coerces a blank input **back** to that
+value, and then persists it to both `os.environ` and `src/agents/.env`. Left
+alone, any user who opens the settings UI gets the exact value the live resource
+rejects written into their environment, with no way to clear it — silently
+defeating `resolve_api_version()`.
+
+- [ ] **Step 1: Inspect the current values**
 
 ```bash
 grep -n "AZURE_OPENAI_API_VERSION" .env.example
+grep -n "2025-01-01-preview" src/agents/devui.py
 ```
 
-- [ ] **Step 2: Replace the line**
+Expected: one line in `.env.example`, and three lines in `devui.py` (239, 247, 591).
+
+- [ ] **Step 2: Replace the line in `.env.example`**
 
 Set the value to empty and document why:
 
@@ -888,23 +903,99 @@ Set the value to empty and document why:
 AZURE_OPENAI_API_VERSION=
 ```
 
-- [ ] **Step 3: Verify line endings are unchanged**
+- [ ] **Step 3: Stop `devui.py` defaulting to the rejected version**
 
-```bash
-file .env.example && git diff --numstat .env.example
+At line 239, in `_load_settings()`, change:
+
+```python
+        "api_version": os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
 ```
 
-Expected: a small line count, and the same line-ending description as before
-your edit.
+to:
 
-- [ ] **Step 4: Commit**
+```python
+        "api_version": os.getenv("AZURE_OPENAI_API_VERSION", ""),
+```
+
+- [ ] **Step 4: Stop `devui.py` coercing a blank back to the rejected version**
+
+At line 247, in `_save_settings()`, change:
+
+```python
+    api_version = api_version.strip() or "2025-01-01-preview"
+```
+
+to:
+
+```python
+    # Empty is meaningful: it selects the current API surface, which is the
+    # only setting that works against both endpoint forms. Do not coerce it.
+    api_version = api_version.strip()
+```
+
+Leave the `deployment` coercion on the line above **unchanged** — `gpt-4o` is a
+real default and blank there is not meaningful.
+
+- [ ] **Step 5: Stop the UI advertising the rejected version**
+
+At line 591, change the placeholder:
+
+```python
+                    placeholder="2025-01-01-preview",
+```
+
+to:
+
+```python
+                    placeholder="leave empty for the current API surface",
+```
+
+- [ ] **Step 6: Verify no rejected version remains in tracked source**
 
 ```bash
-git add .env.example
-git commit -m "docs: clear the stale AZURE_OPENAI_API_VERSION default
+grep -rn "2025-01-01-preview" src/ .env.example --include=* 2>/dev/null | grep -v ".venv" || echo "clean"
+```
 
-2025-01-01-preview is rejected by current Azure OpenAI resources.
-Omitting api_version works against both endpoint forms."
+Expected: `clean`. (Your own `.env` is gitignored and may still contain it —
+that is Task 8 Step 5's concern, not this one.)
+
+- [ ] **Step 7: Verify the module still imports and lint passes**
+
+```bash
+src/agents/.venv/bin/python -c "
+import warnings; warnings.filterwarnings('ignore')
+import sys; sys.path.insert(0, 'src')
+import agents.devui
+print('devui imports OK')
+" 2>&1 | tail -1
+uv run ruff check src/agents tests scripts
+```
+
+Expected: `devui imports OK`, then `All checks passed!`.
+
+If `agents.devui` fails to import because `gradio` is missing, that is
+pre-existing and out of scope — report it and rely on the ruff check instead.
+
+- [ ] **Step 8: Verify line endings are unchanged**
+
+```bash
+file .env.example src/agents/devui.py && git diff --numstat .env.example src/agents/devui.py
+```
+
+Expected: small line counts (roughly 4 and 5), and the same line-ending
+description each file had before your edit.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add .env.example src/agents/devui.py
+git commit -m "fix: stop writing the rejected AZURE_OPENAI_API_VERSION
+
+2025-01-01-preview is rejected by current Azure OpenAI resources;
+omitting api_version works against both endpoint forms. The DevUI
+settings panel defaulted to that value and coerced a blank input back
+to it, persisting it to os.environ and .env, which would have silently
+defeated resolve_api_version(). Empty is now preserved as meaningful."
 git show --numstat HEAD
 ```
 
