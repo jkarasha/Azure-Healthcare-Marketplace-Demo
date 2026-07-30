@@ -203,13 +203,16 @@ agent-framework-core==1.8.0
 agent-framework-openai==1.8.0
 agent-framework-orchestrations==1.0.0rc3
 agent-framework-devui==1.0.0b260528
+agent-framework-lab==1.0.0b251024
 ```
 
 `agent-framework-openai` is a **separate distribution** that provides
 `agent_framework.openai` (and therefore `OpenAIChatClient`, the class this
 migration depends on). Omitting it would leave the exact same drift hole this
 change exists to close. `agent-framework-devui` is required by
-`framework_devui.py`.
+`framework_devui.py`. `agent-framework-lab` provides `agent_framework_lab_gaia`,
+imported by `scripts/eval_native_agent_framework.py`, which
+`make eval-native-local` (and therefore `make eval-all`) invokes.
 
 Note that `agent-framework` is only a meta-package that requires
 `agent-framework-core[all]`, and `[all]` pulls ~20 sibling distributions
