@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 LOG_DIR := .local-logs
 
-.PHONY: local-start local-stop local-logs local-start-reference-data local-start-clinical-research local-start-cosmos-rag local-start-document-reader setup-mcp-config eval-contracts eval-latency-local eval-native-local eval-all \
+.PHONY: local-start local-stop local-logs local-start-reference-data local-start-clinical-research local-start-cosmos-rag local-start-document-reader setup-mcp-config eval-contracts eval-latency-local eval-native-local eval-all test-unit eval-prior-auth \
 	docker-build docker-up docker-down docker-logs docker-ps docker-test \
 	azure-deploy azure-deploy-single \
 	devui devui-local devui-framework devui-framework-local \
@@ -128,13 +128,19 @@ setup-mcp-config:
 eval-contracts:
 	@python3 ./scripts/eval_contracts.py
 
+test-unit:
+	@uv run pytest tests/unit tests/eval -q
+
+eval-prior-auth:
+	@uv run python scripts/eval_prior_auth.py --runs-dir data/cases
+
 eval-latency-local:
 	@python3 ./scripts/eval_latency.py --config ./scripts/evals/mcp-latency.local.json
 
 eval-native-local:
 	@src/agents/.venv/bin/python ./scripts/eval_native_agent_framework.py --config ./scripts/evals/native-agent-framework.local.json --wait-for-servers-seconds 30
 
-eval-all: eval-contracts eval-latency-local eval-native-local
+eval-all: eval-contracts test-unit eval-prior-auth eval-latency-local eval-native-local
 
 # ============================================================================
 # DevUI targets
