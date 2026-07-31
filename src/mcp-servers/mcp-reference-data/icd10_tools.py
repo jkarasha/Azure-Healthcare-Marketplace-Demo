@@ -107,17 +107,23 @@ def _validate_icd10_format(code: str) -> tuple[bool, str]:
     return True, "Format valid"
 
 
+def _search_term(clean_code: str) -> str:
+    """Restore the decimal point for NLM lookups.
+
+    The NLM table indexes codes in dotted form, so "K5080" returns no rows
+    even though "K50.80" exists. Callers accept undotted input, and the dot
+    always follows the 3-character category.
+    """
+    return clean_code if len(clean_code) <= 3 else f"{clean_code[:3]}.{clean_code[3:]}"
+
+
 async def validate_icd10(code: str) -> dict:
     format_valid, format_msg = _validate_icd10_format(code)
     if not format_valid:
         return {"valid": False, "code": code, "reason": format_msg}
 
     clean_code = code.upper().replace(".", "")
-    # The NLM table indexes codes in dotted form, so query with the dot
-    # intact; searching "K5080" returns no rows even though "K50.80" exists.
-    # The format check accepts undotted input, so restore the dot after the
-    # 3-character category before searching.
-    search_term = clean_code if len(clean_code) <= 3 else f"{clean_code[:3]}.{clean_code[3:]}"
+    search_term = _search_term(clean_code)
     async with httpx.AsyncClient() as client:
         response = await client.get(ICD10_API_URL, params={"terms": search_term, "maxList": 10, "sf": "code"})
         response.raise_for_status()
@@ -141,7 +147,9 @@ async def lookup_icd10(code: str) -> dict:
     clean_code = code.upper().replace(".", "")
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(ICD10_API_URL, params={"terms": clean_code, "maxList": 10, "sf": "code"})
+        response = await client.get(
+            ICD10_API_URL, params={"terms": _search_term(clean_code), "maxList": 10, "sf": "code"}
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -159,7 +167,7 @@ async def lookup_icd10(code: str) -> dict:
                 return {
                     "found": True,
                     "code": c,
-                    "description": descriptions[i][0] if descriptions[i] else "N/A",
+                    "description": descriptions[i][1] if len(descriptions[i]) > 1 else "N/A",
                     "chapter": {"range": chapter_info[0], "name": chapter_info[1]},
                     "category": clean_code[:3],
                     "is_billable": len(clean_code) >= 4,
@@ -169,7 +177,10 @@ async def lookup_icd10(code: str) -> dict:
             "found": False,
             "code": code,
             "message": "Exact code not found",
-            "similar_codes": [{"code": codes[i], "description": descriptions[i][0]} for i in range(min(5, len(codes)))],
+            "similar_codes": [
+                {"code": codes[i], "description": descriptions[i][1] if len(descriptions[i]) > 1 else "N/A"}
+                for i in range(min(5, len(codes)))
+            ],
         }
 
 
