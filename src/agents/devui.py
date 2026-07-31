@@ -236,7 +236,7 @@ def _load_settings() -> dict[str, str]:
     return {
         "endpoint": os.getenv("AZURE_OPENAI_ENDPOINT", ""),
         "deployment": os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o"),
-        "api_version": os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
+        "api_version": os.getenv("AZURE_OPENAI_API_VERSION", ""),
     }
 
 
@@ -244,7 +244,8 @@ def _save_settings(endpoint: str, deployment: str, api_version: str) -> str:
     """Save settings to .env and update os.environ. Returns status message."""
     endpoint = endpoint.strip()
     deployment = deployment.strip() or "gpt-4o"
-    api_version = api_version.strip() or "2025-01-01-preview"
+    # Blank is meaningful: it defers to the agent-framework default.
+    api_version = api_version.strip()
 
     if not endpoint:
         return "⚠️ Endpoint is required"
@@ -589,7 +590,7 @@ def build_app(local: bool = False) -> gr.Blocks:
                 api_version_box = gr.Textbox(
                     label="API Version",
                     value=settings["api_version"],
-                    placeholder="2025-01-01-preview",
+                    placeholder="blank = framework default",
                     scale=1,
                     elem_classes=["settings-field"],
                 )
