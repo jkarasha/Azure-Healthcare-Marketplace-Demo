@@ -17,15 +17,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agent_framework.azure import AzureOpenAIResponsesClient
 from agent_framework_orchestrations import ConcurrentBuilder
-from azure.identity import AzureCliCredential, DefaultAzureCredential
 
 from ..agents import (
     create_literature_search_agent,
     create_trials_correlation_agent,
 )
 from ..config import AgentConfig
+from ..llm_client import create_chat_client
 from ..tools import CLINICAL_TRIALS_TOOLS_ALL, MCPToolKit, create_clinical_research_tool
 
 logger = logging.getLogger(__name__)
@@ -59,13 +58,7 @@ async def run_literature_search_workflow(
     output_path = Path(output_dir or "outputs")
     output_path.mkdir(parents=True, exist_ok=True)
 
-    credential = DefaultAzureCredential() if not local else AzureCliCredential()
-    client = AzureOpenAIResponsesClient(
-        credential=credential,
-        endpoint=config.openai.endpoint,
-        deployment_name=config.openai.deployment_name,
-        api_version=config.openai.api_version,
-    )
+    client = create_chat_client(config, local=local)
 
     toolkit = MCPToolKit.from_endpoints(config.endpoints, subscription_key=config.apim_subscription_key)
     query_json = json.dumps(query, indent=2)

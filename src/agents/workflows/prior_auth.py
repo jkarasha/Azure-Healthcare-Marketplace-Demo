@@ -36,9 +36,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from agent_framework.azure import AzureOpenAIResponsesClient
 from agent_framework_orchestrations import ConcurrentBuilder
-from azure.identity import AzureCliCredential, DefaultAzureCredential
 
 from ..agents import (
     create_clinical_reviewer_agent,
@@ -47,6 +45,7 @@ from ..agents import (
     create_synthesis_agent,
 )
 from ..config import AgentConfig
+from ..llm_client import create_chat_client
 from ..tools import MCPToolKit
 from .parsing import extract_json_from_text, extract_recommendation_from_text, split_concurrent_outputs
 
@@ -408,13 +407,7 @@ async def run_prior_auth_workflow(
     assessment_path = waypoint_dir / "assessment.json"
 
     # ── Build LLM client ───────────────────────────────────────────
-    credential = DefaultAzureCredential() if not local else AzureCliCredential()
-    client = AzureOpenAIResponsesClient(
-        credential=credential,
-        endpoint=config.openai.endpoint,
-        deployment_name=config.openai.deployment_name,
-        api_version=config.openai.api_version,
-    )
+    client = create_chat_client(config, local=local)
 
     # ── Build MCP tools ────────────────────────────────────────────
     toolkit = MCPToolKit.from_endpoints(

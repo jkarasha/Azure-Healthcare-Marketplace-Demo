@@ -21,11 +21,10 @@ from pathlib import Path
 from typing import Any
 
 from agent_framework import Agent
-from agent_framework.azure import AzureOpenAIResponsesClient
-from azure.identity import AzureCliCredential, DefaultAzureCredential
 
 from ..agents import PROTOCOL_DRAFT_AGENT_INSTRUCTIONS, create_trials_research_agent
 from ..config import AgentConfig
+from ..llm_client import create_chat_client
 from ..tools import MCPToolKit
 
 logger = logging.getLogger(__name__)
@@ -63,13 +62,7 @@ async def run_clinical_trials_workflow(
     output_path = Path(output_dir or "waypoints")
     output_path.mkdir(parents=True, exist_ok=True)
 
-    credential = DefaultAzureCredential() if not local else AzureCliCredential()
-    client = AzureOpenAIResponsesClient(
-        credential=credential,
-        endpoint=config.openai.endpoint,
-        deployment_name=config.openai.deployment_name,
-        api_version=config.openai.api_version,
-    )
+    client = create_chat_client(config, local=local)
 
     toolkit = MCPToolKit.from_endpoints(config.endpoints, subscription_key=config.apim_subscription_key)
     intervention_json = json.dumps(intervention, indent=2)
