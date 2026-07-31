@@ -473,11 +473,31 @@ Keep the existing `agent_framework_orchestrations` and `azure.identity` imports
 — both credentials are still used by the retry. Add alongside them:
 
 ```python
-    from .config import AgentConfig
     from .llm_client import create_chat_client
 ```
 
-- [ ] **Step 2: Replace the whole client block (lines 98-127)**
+Note the **single** dot: this file lives in `src/agents/`, not in
+`src/agents/workflows/`. Keep the existing `from .config import AgentConfig`
+import where it is.
+
+- [ ] **Step 2: Remove the now-unused `import os`**
+
+`os` is used **only** at lines 98-100, which Step 3 deletes. Remove line 29:
+
+```python
+import os
+```
+
+Ruff will fail with `F401` if you leave it.
+
+- [ ] **Step 3: Replace the whole client block (lines 97-127)**
+
+`config` already exists — line 87 does `config = AgentConfig.load(local=local)`.
+Do **not** load it a second time. `AzureOpenAIConfig.from_env()` reads exactly
+the same three environment variables with exactly the same defaults (`""`,
+`"gpt-4o"`, `"preview"`), and `local` affects only `MCPEndpoints`, never the
+OpenAI settings — so reusing the existing `config` is precisely equivalent to
+the three `os.getenv` calls being removed.
 
 Replace this:
 
@@ -517,8 +537,6 @@ Replace this:
 with this:
 
 ```python
-    config = AgentConfig.load(local=False)
-
     if not config.openai.endpoint:
         raise OSError(
             "AZURE_OPENAI_ENDPOINT is not set. "
@@ -529,19 +547,25 @@ with this:
 
     try:
         client = create_chat_client(
-            config, local=False, credential=DefaultAzureCredential()
+            config, local=local, credential=DefaultAzureCredential()
         )
     except Exception:
         # Fall back to AzureCliCredential if DefaultAzureCredential fails
         logger.warning("DefaultAzureCredential failed, trying AzureCliCredential")
         client = create_chat_client(
-            config, local=False, credential=AzureCliCredential()
+            config, local=local, credential=AzureCliCredential()
         )
 ```
 
 The error message text is unchanged on purpose — it is user-facing guidance.
 
-- [ ] **Step 3: Verify the symbol is gone everywhere**
+The explicit `credential=` is what preserves the retry. Collapsing it into the
+`local` flag would change behavior: today the code *retries* after a failure,
+whereas a flag *chooses* up front. Because a credential is passed, the factory
+ignores `local` for credential selection; `local=local` is passed for
+consistency with the surrounding code rather than hardcoding a value.
+
+- [ ] **Step 4: Verify the symbol is gone everywhere**
 
 ```bash
 grep -rn "AzureOpenAIResponsesClient" src/ --include=*.py | grep -v ".venv" && echo "STILL PRESENT - FIX" || echo "repo clean of removed symbol"
@@ -549,7 +573,7 @@ grep -rn "AzureOpenAIResponsesClient" src/ --include=*.py | grep -v ".venv" && e
 
 Expected: `repo clean of removed symbol`.
 
-- [ ] **Step 4: Verify the module imports**
+- [ ] **Step 5: Verify the module imports**
 
 ```bash
 src/agents/.venv/bin/python -c "
@@ -565,7 +589,7 @@ Expected: `framework_devui imports OK`.
 If ruff later reports `os` as unused in this file, leave it — check first
 whether `os` is used elsewhere in the module before removing the import.
 
-- [ ] **Step 5: Lint and run the offline suite**
+- [ ] **Step 6: Lint and run the offline suite**
 
 ```bash
 uv run ruff check src/agents tests scripts && uv run pytest tests/unit tests/eval -q
@@ -573,7 +597,7 @@ uv run ruff check src/agents tests scripts && uv run pytest tests/unit tests/eva
 
 Expected: `All checks passed!` then `123 passed`.
 
-- [ ] **Step 6: Commit and check line endings**
+- [ ] **Step 7: Commit and check line endings**
 
 ```bash
 git add src/agents/framework_devui.py
