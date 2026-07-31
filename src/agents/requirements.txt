@@ -1,12 +1,19 @@
 # Microsoft Agent Framework - Healthcare Agent Orchestration Layer
 # Install: pip install -r requirements.txt
 
-# Core agent framework (includes openai, azure providers)
-agent-framework[azure]>=1.0.0b260210
-agent-framework-orchestrations>=1.0.0b260210
+# Core agent framework. PINNED: an unpinned floor let core drift to 1.8.0,
+# which removed AzureOpenAIResponsesClient and broke every workflow.
+# Pin every distribution the repo imports directly.
+agent-framework==1.8.0
+agent-framework-core==1.8.0
+agent-framework-openai==1.8.0
+agent-framework-orchestrations==1.0.0rc3
 
 # Framework Developer UI (React app with debug panel, traces, entity discovery)
-agent-framework-devui
+agent-framework-devui==1.0.0b260528
+
+# agent_framework_lab_gaia, used by scripts/eval_native_agent_framework.py
+agent-framework-lab==1.0.0b251024
 
 # Azure identity for APIM / Azure OpenAI auth
 azure-identity>=1.19.0
