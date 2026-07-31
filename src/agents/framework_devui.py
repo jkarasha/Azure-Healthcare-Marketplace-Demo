@@ -26,7 +26,6 @@ Usage:
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -55,7 +54,6 @@ def _create_entities(local: bool = False) -> list:
 
     The DevUI discovers entities and shows their composition structure.
     """
-    from agent_framework.azure import AzureOpenAIResponsesClient
     from agent_framework_orchestrations import ConcurrentBuilder, SequentialBuilder
     from azure.identity import AzureCliCredential, DefaultAzureCredential
 
@@ -72,6 +70,7 @@ def _create_entities(local: bool = False) -> list:
         create_trials_research_agent,
     )
     from .config import AgentConfig
+    from .llm_client import create_chat_client
     from .tools import (
         CLINICAL_TRIALS_TOOLS_ALL,
         FHIR_TOOLS_ALL,
@@ -95,11 +94,7 @@ def _create_entities(local: bool = False) -> list:
     )
 
     # ── Azure OpenAI client ────────────────────────────────────────
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "")
-    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
-    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "preview")
-
-    if not endpoint:
+    if not config.openai.endpoint:
         raise OSError(
             "AZURE_OPENAI_ENDPOINT is not set. "
             "Create src/agents/.env with:\n"
@@ -108,22 +103,14 @@ def _create_entities(local: bool = False) -> list:
         )
 
     try:
-        credential = DefaultAzureCredential()
-        client = AzureOpenAIResponsesClient(
-            azure_endpoint=endpoint,
-            azure_deployment=deployment,
-            credential=credential,
-            api_version=api_version,
+        client = create_chat_client(
+            config, local=local, credential=DefaultAzureCredential()
         )
     except Exception:
         # Fall back to AzureCliCredential if DefaultAzureCredential fails
         logger.warning("DefaultAzureCredential failed, trying AzureCliCredential")
-        credential = AzureCliCredential()
-        client = AzureOpenAIResponsesClient(
-            azure_endpoint=endpoint,
-            azure_deployment=deployment,
-            credential=credential,
-            api_version=api_version,
+        client = create_chat_client(
+            config, local=local, credential=AzureCliCredential()
         )
 
     # ── Shared HTTP client for APIM subscription key ───────────────
