@@ -8,7 +8,7 @@ Build and maintain an Azure-native healthcare marketplace across:
 - Skills (`.github/skills/`)
 - MCP servers (`src/mcp-servers/`)
 - Agent workflows (`src/agents/`)
-- Infra and integration surfaces (`deploy/`, `vscode-extension/`, `foundry-integration/`)
+- Infra and deployment assets (`deploy/`)
 
 ## Do
 - Keep changes small and focused on the requested task.
@@ -39,8 +39,6 @@ Build and maintain an Azure-native healthcare marketplace across:
 - `scripts/`: local launchers, APIM tests, post-deploy config scripts.
   - `scripts/setup-cli/`: interactive setup wizard (`make setup` / `make setup-guided`).
 - `deploy/`: Azure Bicep infrastructure and deployment assets.
-- `vscode-extension/`: `@healthcare` chat participant implementation.
-- `samples/`: standalone reference implementations (e.g., TypeScript FHIR MCP server).
 - `docs/`: operational, architecture, and testing guides.
 
 ## Default Workflow
@@ -101,7 +99,7 @@ Safe by default:
 - Read-only discovery commands (`rg`, `ls`, `cat`, `git status`, `git diff`).
 
 ## Patterns to Reuse
-- MCP server shape: `src/mcp-servers/npi-lookup/function_app.py`
+- MCP server shape: `src/mcp-servers/mcp-reference-data/function_app.py`
 - MCP tool wiring: `src/agents/tools.py`
 - Hybrid workflow orchestration: `src/agents/workflows/prior_auth.py`
 - Sequential workflow orchestration: `src/agents/workflows/clinical_trials.py`
@@ -119,6 +117,7 @@ Safe by default:
 
 ## Canonical Docs
 - `README.md`
+- `docs/architecture/SYSTEM-OVERVIEW.md` (start here: how the layers fit together)
 - `docs/GETTING-STARTED.md` (consolidated from DEVELOPER-GUIDE, LOCAL-TESTING, MCP-SERVERS-BEGINNER-GUIDE)
 - `docs/MCP-OAUTH-PRM.md`
 - `docs/SKILLS-FLOW-MAP.md`
