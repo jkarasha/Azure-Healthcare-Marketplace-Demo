@@ -14,14 +14,15 @@ _OMIT_SENTINELS = frozenset({"preview", "v1", "none"})
 
 
 def resolve_api_version(raw: str | None) -> str | None:
-    """Return the api_version to send, or None to omit the kwarg entirely.
+    """Return the api_version to send, or None to request no specific version.
 
     Args:
         raw: The configured value, typically ``AZURE_OPENAI_API_VERSION``.
 
     Returns:
-        The trimmed version string, or ``None`` when the caller should not
-        pass ``api_version`` at all.
+        The trimmed version string, or ``None`` when no particular version
+        should be requested. Passing ``None`` to the client is equivalent to
+        omitting the argument; see ``llm_client.create_chat_client``.
     """
     if raw is None:
         return None
