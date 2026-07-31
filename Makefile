@@ -132,7 +132,8 @@ test-unit:
 	@uv run pytest tests/unit tests/eval -q
 
 test-local:
-	@PYTHONPATH=src:src/agents/.venv/lib/python3.11/site-packages uv run pytest tests/local -q -p no:cacheprovider
+	@PYTHONPATH="src:$$(src/agents/.venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')" \
+		uv run pytest tests/local -q -p no:cacheprovider
 
 eval-prior-auth:
 	@uv run python scripts/eval_prior_auth.py

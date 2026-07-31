@@ -12,9 +12,11 @@ These assertions are signature-only: no network, no credentials, no LLM calls.
 
 import inspect
 
-import pytest
-
-pytest.importorskip("agent_framework", reason="requires the agents venv")
+# Imported eagerly, NOT via pytest.importorskip: a guard that silently skips
+# when the framework is missing would report green for a broken runner, which
+# is the same no-signal failure this test exists to catch. Wrong venv must
+# fail loudly. `make test-local` supplies the correct interpreter.
+import agent_framework
 
 
 def _params(func) -> set[str]:
@@ -37,8 +39,6 @@ class TestAgentSurface:
         assert "client" in _params(Agent.__init__)
 
     def test_core_symbols_exist(self):
-        import agent_framework
-
         for name in ("Agent", "MCPStreamableHTTPTool", "SupportsChatGetResponse"):
             assert hasattr(agent_framework, name), f"agent_framework lost '{name}'"
 
