@@ -52,7 +52,7 @@ norecursedirs = [".git", ".venv", "node_modules", ".python_packages", ".runs", "
 pythonpath = ["src"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --ignore=tests/local"
 markers = [
     "integration: MCP server integration tests (require running servers)",
 ]

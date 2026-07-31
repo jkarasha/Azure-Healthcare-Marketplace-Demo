@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 LOG_DIR := .local-logs
 
-.PHONY: local-start local-stop local-logs local-start-reference-data local-start-clinical-research local-start-cosmos-rag local-start-document-reader setup-mcp-config eval-contracts eval-latency-local eval-native-local eval-all test-unit eval-prior-auth \
+.PHONY: local-start local-stop local-logs local-start-reference-data local-start-clinical-research local-start-cosmos-rag local-start-document-reader setup-mcp-config eval-contracts eval-latency-local eval-native-local eval-all test-unit test-local eval-prior-auth \
 	docker-build docker-up docker-down docker-logs docker-ps docker-test \
 	azure-deploy azure-deploy-single \
 	devui devui-local devui-framework devui-framework-local \
@@ -130,6 +130,9 @@ eval-contracts:
 
 test-unit:
 	@uv run pytest tests/unit tests/eval -q
+
+test-local:
+	@PYTHONPATH=src:src/agents/.venv/lib/python3.11/site-packages uv run pytest tests/local -q -p no:cacheprovider
 
 eval-prior-auth:
 	@uv run python scripts/eval_prior_auth.py
