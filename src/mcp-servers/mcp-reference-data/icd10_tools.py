@@ -113,8 +113,13 @@ async def validate_icd10(code: str) -> dict:
         return {"valid": False, "code": code, "reason": format_msg}
 
     clean_code = code.upper().replace(".", "")
+    # The NLM table indexes codes in dotted form, so query with the dot
+    # intact; searching "K5080" returns no rows even though "K50.80" exists.
+    # The format check accepts undotted input, so restore the dot after the
+    # 3-character category before searching.
+    search_term = clean_code if len(clean_code) <= 3 else f"{clean_code[:3]}.{clean_code[3:]}"
     async with httpx.AsyncClient() as client:
-        response = await client.get(ICD10_API_URL, params={"terms": clean_code, "maxList": 1, "sf": "code"})
+        response = await client.get(ICD10_API_URL, params={"terms": search_term, "maxList": 10, "sf": "code"})
         response.raise_for_status()
         data = response.json()
 
@@ -123,7 +128,10 @@ async def validate_icd10(code: str) -> dict:
             return {
                 "valid": True,
                 "code": data[1][idx],
-                "description": data[3][idx][0] if data[3] and data[3][idx] else "Description not available",
+                # data[3][idx] is [code, description]; [0] would echo the code.
+                "description": (
+                    data[3][idx][1] if data[3] and len(data[3][idx]) > 1 else "Description not available"
+                ),
             }
 
         return {"valid": False, "code": code, "reason": "Code not found in ICD-10-CM code set"}
