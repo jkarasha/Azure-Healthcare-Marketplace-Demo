@@ -18,7 +18,7 @@ from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity import AzureCliCredential, DefaultAzureCredential
 
 from .config import AgentConfig
-from .llm_options import resolve_api_version
+from .llm_options import cli_process_timeout, resolve_api_version
 
 
 def create_chat_client(
@@ -43,7 +43,12 @@ def create_chat_client(
         A configured OpenAIChatClient.
     """
     if credential is None:
-        credential = AzureCliCredential() if local else DefaultAzureCredential()
+        timeout = cli_process_timeout()
+        credential = (
+            AzureCliCredential(process_timeout=timeout)
+            if local
+            else DefaultAzureCredential(process_timeout=timeout)
+        )
 
     # resolve_api_version returns None for unset/empty values and for the
     # sentinels preview/v1/none. Passing None is identical to omitting the

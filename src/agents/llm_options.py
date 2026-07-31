@@ -7,6 +7,8 @@ agent_framework nor python-dotenv.
 
 from __future__ import annotations
 
+import os
+
 # Values that are not real API versions. Azure's newer "v1" surface is
 # selected by omitting api_version entirely, which is also the only setting
 # that works against both *.openai.azure.com and *.cognitiveservices.azure.com.
@@ -32,3 +34,27 @@ def resolve_api_version(raw: str | None) -> str | None:
     if value.lower() in _OMIT_SENTINELS:
         return None
     return value
+
+
+# azure-identity defaults to a 10s timeout when shelling out to `az`, which is
+# not always enough: a cold Azure CLI has been measured at ~15s on a developer
+# machine. It surfaces as a confusing CredentialUnavailableError("Failed to
+# invoke the Azure CLI") rather than as a timeout, and it is intermittent,
+# because a warm CLI answers well inside 10s.
+DEFAULT_CLI_PROCESS_TIMEOUT = 60
+
+
+def cli_process_timeout() -> int:
+    """Seconds to allow the Azure CLI when acquiring a token.
+
+    Override with AZURE_CLI_PROCESS_TIMEOUT. Values that are unset, blank,
+    non-numeric, or non-positive fall back to the default.
+    """
+    raw = os.getenv("AZURE_CLI_PROCESS_TIMEOUT", "").strip()
+    if not raw:
+        return DEFAULT_CLI_PROCESS_TIMEOUT
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_CLI_PROCESS_TIMEOUT
+    return value if value > 0 else DEFAULT_CLI_PROCESS_TIMEOUT

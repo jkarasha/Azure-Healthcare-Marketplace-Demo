@@ -70,7 +70,7 @@ def _create_entities(local: bool = False) -> list:
         create_trials_research_agent,
     )
     from .config import AgentConfig
-    from .llm_client import create_chat_client
+    from .llm_client import cli_process_timeout, create_chat_client
     from .tools import (
         CLINICAL_TRIALS_TOOLS_ALL,
         FHIR_TOOLS_ALL,
@@ -104,13 +104,13 @@ def _create_entities(local: bool = False) -> list:
 
     try:
         client = create_chat_client(
-            config, local=local, credential=DefaultAzureCredential()
+            config, local=local, credential=DefaultAzureCredential(process_timeout=cli_process_timeout())
         )
     except Exception:
         # Fall back to AzureCliCredential if DefaultAzureCredential fails
         logger.warning("DefaultAzureCredential failed, trying AzureCliCredential")
         client = create_chat_client(
-            config, local=local, credential=AzureCliCredential()
+            config, local=local, credential=AzureCliCredential(process_timeout=cli_process_timeout())
         )
 
     # ── Shared HTTP client for APIM subscription key ───────────────
