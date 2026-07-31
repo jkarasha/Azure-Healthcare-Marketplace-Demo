@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 LOG_DIR := .local-logs
 
-.PHONY: local-start local-stop local-logs local-start-reference-data local-start-clinical-research local-start-cosmos-rag local-start-document-reader setup-mcp-config eval-contracts eval-latency-local eval-native-local eval-all test-unit test-local eval-prior-auth \
+.PHONY: local-start local-stop local-logs local-start-reference-data local-start-clinical-research local-start-cosmos-rag local-start-document-reader setup-mcp-config eval-contracts eval-latency-local eval-native-local eval-all test-unit test-local eval-prior-auth run-prior-auth-local \
 	docker-build docker-up docker-down docker-logs docker-ps docker-test \
 	azure-deploy azure-deploy-single \
 	devui devui-local devui-framework devui-framework-local \
@@ -134,6 +134,9 @@ test-unit:
 test-local:
 	@PYTHONPATH="src:$$(src/agents/.venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')" \
 		uv run pytest tests/local -q -p no:cacheprovider
+
+run-prior-auth-local:
+	@./scripts/run-prior-auth-local.sh $(INPUT)
 
 eval-prior-auth:
 	@uv run python scripts/eval_prior_auth.py
